@@ -165,7 +165,6 @@ public:
 		return arr[pos.x][pos.y] == 0;
 	}
 	void write() {
-
 		FILE *f;
 
 		fopen_s(&f, "out3.txt", "w");
@@ -188,20 +187,20 @@ public:
 		fopen_s(&f2, "out2.txt", "wb");
 		int dat[] = {
 			0x20,
-			0x8094e2,
 			0x8294e2,
+			0x8094e2,
 			0x9894e2,
-			0x8094e2,
-			0x8094e2,
-			0x9494e2,
-			0xb494e2,
+			0x8294e2,
 			0x8294e2,
 			0x9094e2,
-			0x8294e2,
 			0xa494e2,
+			0x8094e2,
+			0x9494e2,
+			0x8094e2,
+			0xb494e2,
 			0x8c94e2,
-			0xac94e2,
 			0x9c94e2,
+			0xac94e2,
 			0xbc94e2,
 		};
 
@@ -211,9 +210,13 @@ public:
 		for (int i = 0; i < N; i++) {
 			for (int j = 0; j < M; j++) {
 
-				fwrite(&dat[arr[i][j]], 1, arr[i][j] == 0 ? 1 : 3, f2);
+				int a = arr[i][j];
+				if (a == -1) a = 0;
 
-
+				int t = fwrite(&dat[a], 1, a == 0 ? 1 : 3, f2);
+				if (t != 1) {
+					int a = 5;
+				}
 
 			}
 			int t = 0xa0d;
@@ -229,8 +232,25 @@ public:
 		genPaths(n);
 		genWalls();
 		connectRooms();
-		checkUnreached();
+		//checkUnreached();
 		fixSides();
+
+		if (roomPos.size() > 0) {
+
+			player.x = roomPos[0].x * 3 + 1;
+			player.y = roomPos[0].y * 3 + 1;
+		} else {
+			while (true) {
+				Pos p;
+				p.x = ran(N * 3);
+				p.y = ran(M * 3);
+				if (walls[p.x][p.y] == ' ') {
+					player = p;
+					break;
+				}
+			}
+		}
+
 		write();
 	}
 
@@ -245,8 +265,7 @@ public:
 			walls[0][j] = '*';
 			walls[3 * N - 1][j] = '*';
 		}
-		player.x = roomPos[0].x * 3 + 1;
-		player.y = roomPos[0].y * 3 + 1;
+
 		printw("  done\n"); refresh();
 	}
 	void checkUnreached() {
@@ -356,7 +375,7 @@ public:
 	void genRooms() {
 		printw("genRooms..."); refresh();
 		roomCount = 0;
-		for (int a = 0; a < N*M / 10; a++) {
+		for (int a = 0; a < N*M / 20 + 2; a++) {
 			int w = 3 + ran(5);
 			int h = 3 + ran(5);
 			int x = ran(N - w);
@@ -425,10 +444,10 @@ public:
 					walls[i * 3][j * 3 + 2] = '*';
 
 
-					walls[i * 3 + 1][j * 3] = t & B_UP ? ' ' : '*';
-					walls[i * 3][j * 3 + 1] = t & B_LEFT ? ' ' : '*';
-					walls[i * 3 + 1][j * 3 + 2] = t & B_DOWN ? ' ' : '*';
-					walls[i * 3 + 2][j * 3 + 1] = t & B_RIGHT ? ' ' : '*';
+					walls[i * 3][j * 3 + 1] = t & B_UP ? ' ' : '*';
+					walls[i * 3 + 1][j * 3] = t & B_LEFT ? ' ' : '*';
+					walls[i * 3 + 2][j * 3 + 1] = t & B_DOWN ? ' ' : '*';
+					walls[i * 3 + 1][j * 3 + 2] = t & B_RIGHT ? ' ' : '*';
 
 				} else if (t & 16) {
 					t = t & 15;
@@ -569,9 +588,9 @@ public:
 					float fourWayMult = nCount >= 3 ? 1.0f : 0.0f;
 					float stopMult = nodes.size() > 1 ? 1.0f : 0.0f;
 
-					//printw("%d << %d %d << %d %f %f %f %f  << %d %d %d\n", n.dir, n.pos.x, n.pos.y, noActionChance, changeDirMult, threeWayMult, fourWayMult, stopMult, left, right, front);
-
-					if (n.pos.x == 15 && n.pos.y == 8) {
+					printw("%d << %d %d << %d %f %f %f %f  << %d %d %d\n", n.dir, n.pos.x, n.pos.y, noActionChance, changeDirMult, threeWayMult, fourWayMult, stopMult, left, right, front);
+					write();
+					if (n.pos.x == 12 && n.pos.y == 10) {
 						int a = 5;
 					}
 					int nextAction = getRandomAction(noActionChance, changeDirMult, threeWayMult, fourWayMult, stopMult);
@@ -661,14 +680,15 @@ public:
 							i--;
 						}
 					}
+					write();
 				}
 			}
-
+			/*
 			if (added.size() < 2) {
-				for (unsigned i = 0; i < added.size(); i++) {
-					arr[added[i].x][added[i].y] = -1;
-				}
+			for (unsigned i = 0; i < added.size(); i++) {
+			arr[added[i].x][added[i].y] = 0xFF;
 			}
+			}*/
 		}
 
 		printw(" done\n"); refresh();
@@ -676,7 +696,7 @@ public:
 
 };
 
-Maze<25, 25> maze;
+Maze<15, 15> maze;
 
 void control(int i) {
 	bool moved = false;
@@ -737,12 +757,13 @@ void gameRefresh() {
 }
 
 int main() {
+	srand(5);
 	win = initscr();
 	scrollok(win, true);
 	keypad(win, true);
 	nodelay(win, true);
 	curs_set(0);
-	maze.genRand(3);
+	maze.genRand(10);
 
 
 	resize_term(60, 80);

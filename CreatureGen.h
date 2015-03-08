@@ -10,8 +10,12 @@ Weapon getWeapon(int level) {
 	if (level > 2) {
 		rangeMin++;
 	}
-
-	switch (rangeMin + ran(rangeMax - rangeMin)) {
+	if (level == -1) {
+		rangeMin = 0;
+		rangeMax = 0;
+	}
+	w.type = rangeMin + ran(rangeMax - rangeMin + 1);
+	switch (w.type) {
 		case 0:
 			w.minDamage = 1 + level;
 			w.maxDamage = w.minDamage + ran(1 + level) + 2;
@@ -55,16 +59,20 @@ Creature generateGoblin(int level) {
 	Creature c;
 	strcpy_s(c.name, "Goblin");
 	c.level = level;
-	c.hp = 20 + level * 10 + ran(4) * 5;
+	c.hpMax = 20 + level * 10 + ran(4) * 5;
+	c.hp = c.hpMax;
 	c.mp = 0;
 	c.minExp = 30.0f + level*10.0f;
 	c.maxExp = c.minExp*1.2f;
-	c.sight = 4.0f;
+	c.sight = 6.0f;
 	c.movePerTick = 6.0f;
 	c.weapon = getWeapon(0);
+	c.explores = false;
+	c.wandersAround = true;
 	c.type = GOBLIN;
 	c.level = level;
 	c.pixel.character = 'g';
 	c.pixel.color = getColorIndex(0, 4, 2);
+	c.tickToRegen = 100.0f;
 	return c;
 }

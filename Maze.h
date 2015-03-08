@@ -18,6 +18,7 @@ public:
 	int roomCount;
 	vector<Pos> roomPos;
 
+	vector<Pos> emptyPos;
 	GameWindow<MAZE_W, MAZE_H> *window;
 
 	Maze() {
@@ -155,6 +156,14 @@ public:
 		connectRooms();
 		fixSides();
 		checkUnreached();
+
+		for (int i = 0; i < MAZE_W; i++) {
+			for (int j = 0; j < MAZE_H; j++) {
+				if (walls[i][j] == 0) {
+					emptyPos.push_back(Pos(i, j));
+				}
+			}
+		}
 	}
 
 	void fixSides() {

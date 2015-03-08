@@ -11,7 +11,7 @@
 #include<stack>
 #include<vector>
 #include<queue>
-
+#include<assert.h>
 #ifdef LINUX
 #include <unistd.h>
 #endif
@@ -20,15 +20,6 @@
 #endif
 #undef MOUSE_MOVED
 #include<curses.h>
-
-void msleep(int sleepMS) {
-#ifdef LINUX
-	usleep(sleepMs * 1000);
-#endif
-#ifdef WINDOWS
-	Sleep(sleepMS);
-#endif
-}
 
 using namespace std;
 
@@ -47,9 +38,9 @@ using namespace std;
 
 #define MAX_MESSAGE 100
 
-unordered_map<int, float> moveWeights;
-unordered_map<int, float> addWeights;
-unordered_map<int, float> seeWeights;
+extern unordered_map<int, float> moveWeights;
+extern unordered_map<int, float> addWeights;
+extern unordered_map<int, float> seeWeights;
 
 #define B_UP 1
 #define B_LEFT 2
@@ -58,47 +49,21 @@ unordered_map<int, float> seeWeights;
 
 #define DIAG_MUL 1.41421356237f
 
-int ran(int n) {
-	return rand() % n;
-}
 
 #define ADVENTURER 11
 #define ADVENTURER_ALLY 12
 
 #define GOBLIN 101
 
-float ranf(float a, float b) {
-	return a + (b - a)*(ran(10000) / 10000.0f);
-}
-void initTools() {
-	seeWeights.clear();
-	seeWeights[0] = 1.0f;
-	seeWeights[1] = -1.0f;
-	seeWeights[2] = -1.0f;
+#define FIGHTER 0
+#define MAGE 1
+#define ROGUE 2
+#define PRIEST 3
 
-	seeWeights[ADVENTURER] = 0.0f;
-	seeWeights[ADVENTURER_ALLY] = 0.0f;
-	seeWeights[GOBLIN] = 0.0f;
-
-	addWeights.clear();
-	addWeights[0] = 1.0f;
-	addWeights[1] = -1.0f;
-	addWeights[2] = -1.0f;
-
-	addWeights[ADVENTURER] = 1.0f;
-	addWeights[ADVENTURER_ALLY] = 1.0f;
-	addWeights[GOBLIN] = 1.0f;
-
-	moveWeights.clear();
-	moveWeights[0] = 1.0f;
-	moveWeights[1] = -1.0f;
-	moveWeights[2] = -1.0f;
-
-
-	moveWeights[ADVENTURER] = -1.0f;
-	moveWeights[ADVENTURER_ALLY] = -1.0f;
-	moveWeights[GOBLIN] = -1.0f;
-}
+int ran(int n);
+float ranf(float a, float b);
+int rani(int a, int b);
+void initTools();
 
 class Pos {
 public:
@@ -120,6 +85,13 @@ public:
 	}
 };
 
+class Creature;
+
+class AttackListener {
+public:
+	virtual void attacked(Creature* attacker, Creature* defender, int damage) = 0;
+};
+
 
 class Pixel {
 public:
@@ -130,7 +102,7 @@ public:
 
 extern int messagePos;
 extern char messages[MAX_MESSAGE][128];
-
+extern int globalVisible[MAZE_W][MAZE_H];
 class Node {
 public:
 	Pos pos;
@@ -153,27 +125,11 @@ public:
 
 };
 
-int getReverseDir(int dir) {
-	if (dir < 4) {
-		return (dir + 2) % 4;
-	} else {
-		int t = dir - 4;
-		t = (dir + 2) % 4;
-		return t + 4;
-	}
-}
 
-int getSideDir(int dir, int side) {
-	if (dir < 4) {
-		int t = dir + side;
-		if (dir < 0) dir += 4;
-		return dir % 4;
-	} else {
-		int t = dir + side - 4;
-		if (dir < 0) dir += 4;
-		return (dir % 4) + 4;
-	}
-}
+int dist(Pos& p1, Pos& p2);
+int getReverseDir(int dir);
+
+int getSideDir(int dir, int side);
 class CompareNode {
 public:
 	CompareNode(const bool& revparam = true) {}
@@ -183,7 +139,7 @@ public:
 };
 
 template<int W, int H>
-bool doSearchExplore(Pos startPos, int arr[W][H], unordered_map<int, float> weights, float max_weight, int targetArr[W][H], int targetVal, Pos&endPos, vector<Pos> &path, vector<Pos>& exploredPos, bool ignoreDiag = false) {
+bool doSearchExplore(Pos startPos, int arr[W][H], unordered_map<int, float> weights, float max_weight, int targetArr[W][H], int targetVal, Pos&endPos, vector<Pos> &path, vector<Pos>& exploredPos, bool ignoreDiag = false, bool addLastIfMinus = false) {
 	int explored[W][H];
 	exploredPos.clear();
 	path.clear();
@@ -215,8 +171,10 @@ bool doSearchExplore(Pos startPos, int arr[W][H], unordered_map<int, float> weig
 					Node newNode = Node(nPos.x, nPos.y);
 					newNode.path = n.path + weight;
 					queue.emplace(newNode);
+					exploredPos.push_back(nPos);
+				} else if (weight < 0 && addLastIfMinus) {
+					exploredPos.push_back(nPos);
 				}
-				exploredPos.push_back(nPos);
 			}
 		}
 	}
@@ -266,59 +224,22 @@ bool findPath(Pos startPos, Pos endPos, int arr[W][H], unordered_map<int, float>
 }
 
 template<int W, int H>
-void doExplore(Pos startPos, int arr[W][H], unordered_map<int, float> weights, float max_weight, vector<Pos>& exploredPos, bool ignoreDiag = false) {
+void doExplore(Pos startPos, int arr[W][H], unordered_map<int, float> weights, float max_weight, vector<Pos>& exploredPos, bool ignoreDiag = false, bool addLastIfMinus = false) {
 	Pos endPos;
 	vector<Pos> path;
 	int targetArr[W][H];
-	doSearchExplore<W, H>(startPos, arr, weights, max_weight, targetArr, -1, endPos, path, exploredPos, ignoreDiag);
+	doSearchExplore<W, H>(startPos, arr, weights, max_weight, targetArr, -1, endPos, path, exploredPos, ignoreDiag, addLastIfMinus);
 }
 
-Pos getPosForDir(Pos i, int dir) {
-	switch (dir) {
-		case UP:
-			i.x--;
-			break;
-		case LEFT:
-			i.y--;
-			break;
-		case DOWN:
-			i.x++;
-			break;
-		case RIGHT:
-			i.y++;
-			break;
+Pos getPosForDir(Pos i, int dir);
+
+int getColorIndex(int r, int g, int b);
 
 
-		case UP_LEFT:
-			i.x--;
-			i.y--;
-			break;
-		case UP_RIGHT:
-			i.x--;
-			i.y++;
-			break;
-		case DOWN_LEFT:
-			i.x++;
-			i.y--;
-			break;
-		case DOWN_RIGHT:
-			i.x++;
-			i.y++;
-			break;
-	}
-	return i;
-}
+void pushMessage(char *str);
 
 
-int getColorIndex(int r, int g, int b) {
-	return (b >> 1) | (g << 2) | (r << 5);
-}
+void msleep(int sleepMS);
 
 
-void pushMessage(char *str) {
-	messagePos++;
-	if (messagePos >= MAX_MESSAGE) {
-		messagePos -= MAX_MESSAGE;
-	}
-	strcpy_s(messages[messagePos], str);
-}
+unsigned mtime();

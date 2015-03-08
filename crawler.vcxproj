@@ -75,6 +75,8 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="Skill.cpp" />
+    <ClCompile Include="Tools.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CreatureGen.h" />
@@ -82,6 +84,7 @@
     <ClInclude Include="Maze.h" />
     <ClInclude Include="Creature.h" />
     <ClInclude Include="MazeActions.h" />
+    <ClInclude Include="Skill.h" />
     <ClInclude Include="Tools.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

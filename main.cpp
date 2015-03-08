@@ -16,6 +16,7 @@ Maze maze;
 bool tickGame;
 
 
+int nextCreatureIndex = 0;
 
 int messagePos;
 char messages[MAX_MESSAGE][128];
@@ -23,9 +24,10 @@ char messages[MAX_MESSAGE][128];
 vector<Creature> creatures;
 Pos cursor;
 GameWindow<MAZE_W, MAZE_H> mazeWindow;
-
+int globalVisible[MAZE_W][MAZE_H];
 
 void resetGame() {
+	memset(globalVisible, 0, sizeof(globalVisible));
 	globalTick = 0;
 	realTick = 0;
 
@@ -37,41 +39,40 @@ void resetGame() {
 	creatures.clear();
 	creatures.push_back(Creature());
 	creatures[0].explores = true;
+	creatures[0].wandersAround = false;
 	creatures[0].type = ADVENTURER;
 	creatures[0].pixel.character = '@';
 	creatures[0].pixel.color = getColorIndex(7, 0, 0);
-	creatures[0].movePerTick = 3.0f;
+	creatures[0].movePerTick = 5.0f;
 	creatures[0].sight = 5.0f;
-	creatures[0].hp = 300;
-	creatures[0].mp = 100;
+	creatures[0].hpMax = creatures[0].hp = 300;
+	creatures[0].mpMax = creatures[0].mp = 100;
 	creatures[0].level = 1;
 	strcpy_s(creatures[0].name, "Adventurer");
 	creatures[0].weapon = getWeapon(4);
 	creatures[0].reset(Pos(maze.roomPos[0].x, maze.roomPos[0].y));
+	creatures[0].tickToRegen = 80.0f;
+	creatures[0].skills.push_back(new BerserkSkill(&creatures[0]));
 
 	pushMessage("Wild Adventurer appeared!");
 
 	for (int i = 0; i < 6; i++) {
 		while (true) {
-			Pos p;
-			p.x = ran(MAZE_W);
-			p.y = ran(MAZE_H);
-
+			Pos p = maze.emptyPos[ran(maze.emptyPos.size())];
 			vector<Creature> group;
-			if (generateCreatureGroup(p, group)) {
+			if (generateCreatureGroup(p, group, 1, GOBLIN)) {
 				for (unsigned i = 0; i < group.size(); i++) {
 					creatures.push_back(group[i]);
 				}
 				break;
 			}
-
 		}
 	}
 
 	cursor = creatures[0].pos;
 	tickGame = false;
 
-	srand(time(0));
+	srand((unsigned)time(0));
 }
 
 
@@ -94,7 +95,7 @@ bool control(int i) {
 		case '1':
 			if (!tickGame) {
 				Creature c;
-				if (generateCreature(cursor, c)) {
+				if (generateCreature(cursor, c, 1, GOBLIN)) {
 					creatures.push_back(c);
 				}
 			}
@@ -102,7 +103,7 @@ bool control(int i) {
 		case '2':
 			if (!tickGame) {
 				vector<Creature> group;
-				if (generateCreatureGroup(cursor, group)) {
+				if (generateCreatureGroup(cursor, group, 1, GOBLIN)) {
 					for (unsigned i = 0; i < group.size(); i++) {
 						creatures.push_back(group[i]);
 					}
@@ -145,8 +146,8 @@ void gameRefresh() {
 
 	int row, col;
 	getmaxyx(stdscr, row, col);
-	mazeWindow.windowSize.x = row - 10;
-	mazeWindow.windowSize.y = col - 25;
+	mazeWindow.windowSize.x = row - 15;
+	mazeWindow.windowSize.y = col - 35;
 
 	for (int i = 0; i < MAZE_W; i++) {
 		for (int j = 0; j < MAZE_H; j++) {
@@ -177,6 +178,7 @@ void gameRefresh() {
 	mazeWindow.data[creatures[0].moveTarget.x][creatures[0].moveTarget.y].character = 'X';
 	mazeWindow.data[creatures[0].moveTarget.x][creatures[0].moveTarget.y].color = getColorIndex(7, 0, 0);
 
+
 	for (unsigned i = 0; i < creatures.size(); i++) {
 		mazeWindow.data[creatures[i].pos.x][creatures[i].pos.y] = creatures[i].pixel;
 	}
@@ -185,7 +187,7 @@ void gameRefresh() {
 	if (tickGame) {
 		creatureToShow = &creatures[0];
 	} else {
-		for (int i = 0; i < creatures.size(); i++) {
+		for (unsigned i = 0; i < creatures.size(); i++) {
 			if (creatures[i].pos == cursor) {
 				creatureToShow = &creatures[i];
 			}
@@ -197,14 +199,14 @@ void gameRefresh() {
 		int y = mazeWindow.windowPos.y + mazeWindow.windowSize.y + 2;
 
 		attrset(COLOR_PAIR(creatureToShow->pixel.color));
-		mvprintw(x++, y, "LVL %d %s", creatureToShow->level, creatureToShow->name);
+		mvprintw(x++, y, "LVL %d %s #%d", creatureToShow->level, creatureToShow->name, creatureToShow->index);
 		x++;
 
 		attrset(COLOR_PAIR(getColorIndex(7, 0, 0)));
-		mvprintw(x++, y, "HP : %d", creatureToShow->hp);
-		if (creatureToShow->mp > 0) {
+		mvprintw(x++, y, "HP : %d / %d", creatureToShow->hp, creatureToShow->hpMax);
+		if (creatureToShow->mpMax > 0) {
 			attrset(COLOR_PAIR(getColorIndex(0, 0, 7)));
-			mvprintw(x++, y, "MP : %d", creatureToShow->mp);
+			mvprintw(x++, y, "MP : %d / %d", creatureToShow->mp, creatureToShow->mpMax);
 		}
 		if (creatureToShow->type > 100) {
 			attrset(COLOR_PAIR(getColorIndex(7, 7, 0)));
@@ -214,6 +216,7 @@ void gameRefresh() {
 		attrset(COLOR_PAIR(getColorIndex(4, 4, 4)));
 		mvprintw(x++, y, "EYE : %d", (int)creatureToShow->getSight());
 		mvprintw(x++, y, "MV SPD : %d", (int)creatureToShow->perMoveTick());
+		mvprintw(x++, y, "ATK SPD : %d", (int)creatureToShow->perAttackTick());
 
 		x++;
 
@@ -222,8 +225,13 @@ void gameRefresh() {
 
 		mvprintw(x++, y, "WPN : %s", creatureToShow->weapon.name);
 		mvprintw(x++, y, "DMG : %d - %d", creatureToShow->weapon.minDamage, creatureToShow->weapon.maxDamage);
-		mvprintw(x++, y, "ATK SPD : %d", (int)creatureToShow->perAttackTick());
+		mvprintw(x++, y, "ATK SPD : %d", (int)creatureToShow->weapon.swingTime);
 		mvprintw(x++, y, "RNG : %d", creatureToShow->weapon.range);
+
+		x++;
+		for (unsigned i = 0; i < creatureToShow->buffs.size(); i++) {
+			creatureToShow->buffs[i]->printStats(creatureToShow, x, y);
+		}
 
 	}
 
@@ -244,6 +252,7 @@ void gameRefresh() {
 	}
 
 	mazeWindow.render();
+	attrset(COLOR_PAIR(255));
 
 	int j = messagePos;
 	int i = 0;
@@ -265,14 +274,13 @@ bool tick() {
 	bool hasChange = false;
 	globalTick += 1.0f;
 	for (unsigned i = 0; i < creatures.size(); i++) {
-		hasChange |= creatures[i].tick();
-	}
-
-	for (unsigned i = 0; i < creatures.size(); i++) {
 		if (creatures[i].isDead) {
 			creatures[i] = creatures[creatures.size() - 1];
 			creatures.pop_back();
+			i--;
+			continue;
 		}
+		hasChange |= creatures[i].tick();
 	}
 
 	return hasChange;
@@ -290,6 +298,8 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 	keypad(win, true);
 	nodelay(win, true);
 	curs_set(0);
+
+	resize_term(45, 110);
 
 	resetGame();
 
@@ -312,13 +322,13 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 	mazeWindow.windowPos.y = 2;
 
 
-	resize_term(40, 100);
 
 	//scrollok(win, false);
 
 
 	while (true) {
 		int i;
+		unsigned time = mtime();
 		int t = maze.walls[44][11];
 		bool hasChange = false;
 		while ((i = getch()) != ERR) {
@@ -330,7 +340,11 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 		gameRefresh();
 		if (hasChange || !tickGame) {
 			realTick += 20.0f;
-			msleep(20);
+			time -= mtime();
+			int wait = 10 - time;
+			if (wait > 0) {
+				msleep(wait);
+			}
 		}
 	}
 	endwin();

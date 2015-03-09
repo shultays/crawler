@@ -49,6 +49,8 @@ void initTools() {
 int dist(Pos& p1, Pos& p2) {
 	return abs(p1.x - p2.x) + abs(p1.y - p2.y);
 }
+
+
 int getReverseDir(int dir) {
 	if (dir < 4) {
 		return (dir + 2) % 4;

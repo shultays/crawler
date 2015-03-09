@@ -9,7 +9,7 @@ extern Maze maze;
 extern float globalTick;
 extern bool tickGame;
 class Creature;
-extern vector<Creature> creatures;
+extern vector<Creature*> creatures;
 
 class Weapon {
 public:
@@ -19,9 +19,18 @@ public:
 	int maxDamage;
 	int range;
 	char name[32];
+
 	int getDamage() {
 		return minDamage + ran(maxDamage - minDamage + 1);
 	}
+};
+
+class Armor{
+public:
+	int type;
+	int DR;
+	float slowness;
+	char name[32];
 };
 
 class Creature {
@@ -49,7 +58,9 @@ public:
 	int mp;
 	int mpMax;
 	int hpMax;
-	Weapon weapon;
+	
+	Weapon* weapon;
+	Armor* armor;
 
 	int level;
 
@@ -69,6 +80,7 @@ public:
 	float sight;
 	float movePerTick;
 	float lastRegenTick;
+	float lastManaRegenTick;
 	float tickToNextWander;
 
 	float tickToRegen;
@@ -78,10 +90,15 @@ public:
 
 	float timeToNextSkill;
 
-
 	vector<Buff*> buffs;
 	vector<Skill*> skills;
 	vector<AttackListener*> attackListeners;
+	Creature* master;
+
+	vector<Creature*> creaturesToAttack;
+	vector<Creature*> creaturesToMove;
+	vector<Creature*> allies;
+	vector<Creature*> enemies;
 
 	float getTickToRegen() {
 		return tickToRegen;
@@ -104,7 +121,7 @@ public:
 	int moveSpeedMult;
 
 	int getWeaponDamage() {
-		return (weapon.getDamage()*damageMult) / 1000 + damageBoost;
+		return (weapon->getDamage()*damageMult) / 1000 + damageBoost;
 	}
 	int DR;
 
@@ -117,7 +134,7 @@ public:
 	}
 
 	float perAttackTick() {
-		return (weapon.swingTime * attackSpeedMult) / 1000;
+		return (weapon->swingTime * attackSpeedMult) / 1000;
 	}
 
 	float getWanderTime() {
@@ -134,23 +151,22 @@ public:
 		sight = 4.0f;
 		strcpy_s(name, "Weakling");
 		movePerTick = 10000.0f;
-		weapon.maxDamage = weapon.minDamage = 1;
-		strcpy_s(weapon.name, "Tickles");
-		weapon.range = 1;
-		weapon.swingTime = 20.0f;
 		pixel.color = ran(256);
 		pixel.character = '?';
 		minExp = maxExp = 0;
+		tickToManaRegen = 150.0f;
+		tickToManaRegen = 100.0f;
 		explores = wandersAround = false;
 	}
 	~Creature() {
-		/*
 		for (unsigned i = 0; i < skills.size(); i++) {
-		delete skills[i];
+			delete skills[i];
 		}
 		for (unsigned i = 0; i < buffs.size(); i++) {
-		delete buffs[i];
-		}*/
+			buffs[i]->end(this);
+			delete buffs[i];
+		}
+		delete weapon;
 	}
 
 	void reset(Pos pos) {
@@ -161,6 +177,7 @@ public:
 		updateVisibility();
 		lastTick = globalTick;
 		lastRegenTick = globalTick;
+		lastManaRegenTick = globalTick;
 		timeToNextSkill = globalTick;
 		isDead = false;
 		hasTarget = false;
@@ -269,17 +286,86 @@ public:
 			lastRegenTick += getTickToRegen();
 			heal(hpMax / 20);
 		}
-		while (globalTick - lastRegenTick > getTickToManaRegen()) {
-			lastRegenTick += getTickToRegen();
+		while (globalTick - lastManaRegenTick > getTickToManaRegen()) {
+			lastManaRegenTick += getTickToRegen();
 			mp += mpMax / 20;
 			if (mp > mpMax) mp = mpMax;
 		}
 
-		vector<Creature*> creaturesToAttack;
-		vector<Creature*> creaturesToMove;
-		vector<Creature*> allies;
-		vector<Creature*> enemies;
-		Creature* master = NULL;
+		master = NULL;
+
+		checkCreaturesAround();
+		checkSkills();
+		tickBuffs();
+		checkShouldRunAway();
+
+		if (wantsToRun) {
+			if(tryToRun()){
+				return true;
+			}
+		} else if (creaturesToAttack.size() > 0) {
+			if(tryToAttack()){
+				return true;
+			}
+		} else	if (creaturesToMove.size() > 0) {
+			if(tryToApproach()){
+				return true;
+			}
+		} else if (hp < hpMax / 3) {
+			return false;
+		} else if (!hasTarget && explores) {
+			if (wantsToRun) {
+				return false;
+			}
+			findTarget();
+		} else if (wandersAround && tickToNextWander < globalTick &&  globalTick - lastTick >= perMoveTick()) {
+			if(tryToWander()){
+				return true;
+			}
+		}
+
+		if(tryToGoTarget()){
+			return true;
+		}
+
+		return false;
+	}
+
+	void doDamage(int damage) {
+		damage -= DR;
+		if (damage < 1) damage = 1;
+		hp -= damage;
+		if (wantsToRun) {
+			if (pathVal == targetPath.size()) {
+				wantsToRun = false;
+				timeToRunAgain = globalTick + 250;
+			}
+		}
+		if (hp <= 0) {
+			hp = 0;
+			isDead = true;
+			maze.walls[pos.x][pos.y] = 0;
+			char buff[128];
+			sprintf_s(buff, "%s#%d dies!", name, index);
+			pushMessage(buff);
+		}
+	}
+
+	bool isEnemy(int type) {
+		if (type > 100 && this->type <= 100) {
+			return true;
+		} else if (type <= 100 && this->type > 100) {
+			return true;
+		}
+		return false;
+	}
+
+	void checkCreaturesAround()
+	{
+		allies.clear();
+		enemies.clear();
+		creaturesToAttack.clear();
+		creaturesToMove.clear();
 
 		for (unsigned i = 0; i < visible.size(); i++) {
 			Pos p = visible[i];
@@ -287,8 +373,8 @@ public:
 			if (maze.walls[p.x][p.y] > 10) {
 				Creature* creature = NULL;
 				for (unsigned i = 0; i < creatures.size(); i++) {
-					if (creatures[i].pos == p) {
-						creature = &creatures[i];
+					if (creatures[i]->pos == p) {
+						creature = creatures[i];
 						break;
 					}
 				}
@@ -301,7 +387,7 @@ public:
 					int dist_y = abs(p.y - pos.y);
 					int dist = (int)sqrt(dist_x*dist_x + dist_y*dist_y);
 
-					if (dist <= weapon.range) {
+					if (dist <= weapon->range) {
 						creaturesToAttack.push_back(creature);
 					} else {
 						creaturesToMove.push_back(creature);
@@ -314,6 +400,12 @@ public:
 				}
 			}
 		}
+
+	}
+
+
+	void checkSkills()
+	{
 		if (timeToNextSkill <= globalTick) {
 			int skillToCast = -1;
 			int minSkillVal = 100000;
@@ -333,6 +425,11 @@ public:
 			}
 		}
 
+	}
+
+	void tickBuffs()
+	{
+
 		for (unsigned i = 0; i < buffs.size(); i++) {
 			buffs[i]->tick(this);
 			if (buffs[i]->ended == false && buffs[i]->tickToDie < globalTick) {
@@ -347,6 +444,11 @@ public:
 				continue;
 			}
 		}
+	}
+
+	void checkShouldRunAway()
+	{
+
 		if (!fearless && timeToRunAgain < globalTick && enemies.size() >= 4 && !wantsToRun && hp < hpMax / 2) {
 
 			int currentNCount = -1;
@@ -401,138 +503,148 @@ public:
 			}
 		}
 
+	}
+
+	bool tryToRun()
+	{
+		if (pathVal < targetPath.size()) {
+			if (globalTick - lastTick >= perMoveTick()) {
+				if (moveToPos(targetPath[pathVal++])) {
+					timeToFeelSafe = globalTick + 50.0f;
+					return true;
+				}
+			}
+		}
+		if (timeToFeelSafe <  globalTick) {
+			wantsToRun = false;
+			timeToRunAgain = globalTick + 250;
+			return true;
+		}	
+		return false;
+	}
+
+	bool tryToAttack()
+	{
+		if (globalTick - lastTick >= perAttackTick()) {
+			bool reattack = false;
+
+			if (type == ADVENTURER) {
+				int a = 5;
+			}
+			int attackIndex;
+			for (unsigned i = 0; i < creaturesToAttack.size(); i++) {
+				if (creaturesToAttack[i]->index == lastAttackCreatureIndex) {
+					reattack = true;
+					attackIndex = i;
+					break;
+				}
+			}
+			if (!reattack) {
+				attackIndex = ran(creaturesToAttack.size());
+			}
+			lastAttackCreatureIndex = creaturesToAttack[attackIndex]->index;
+
+			int damage = getWeaponDamage();
+
+			char buff[128];
+			sprintf_s(buff, "%s#%d attacks %s#%d with its %s for %d damage!", name, index, creaturesToAttack[attackIndex]->name, creaturesToAttack[attackIndex]->index, weapon->name, damage);
+			pushMessage(buff);
+
+			for (unsigned i = 0; i < attackListeners.size(); i++) {
+				attackListeners[i]->attacked(this, creaturesToAttack[attackIndex], damage);
+			}
+			creaturesToAttack[attackIndex]->doDamage(damage);
+
+			lastTick = globalTick;
+			return true;
+		}
+		return false;
+	}
+
+	bool tryToApproach()
+	{
 		if (wantsToRun) {
-			if (pathVal < targetPath.size()) {
-				if (globalTick - lastTick >= perMoveTick()) {
-					if (moveToPos(targetPath[pathVal++])) {
-						timeToFeelSafe = globalTick + 50.0f;
+			return false;
+		}
+		if (globalTick - lastTick >= perMoveTick()) {
+			Pos p = getAveragePos(creaturesToMove);
+
+			bool found = p != pos && findPath<MAZE_W, MAZE_H>(pos, p, maze.walls, moveWeights, 10000000.0f, targetPath);
+			if (found) {
+				moveToPos(targetPath[0]);
+				lastTick = globalTick;
+				return true;
+			} else {
+				for (unsigned i = 0; i < creaturesToMove.size(); i++) {
+
+					found = findPath<MAZE_W, MAZE_H>(pos, creaturesToMove[i]->pos, maze.walls, moveWeights, 10000000.0f, targetPath);
+					if (found) {
+						moveToPos(targetPath[0]);
+						lastTick = globalTick;
 						return true;
 					}
 				}
 			}
-			if (timeToFeelSafe <  globalTick) {
-				wantsToRun = false;
-				timeToRunAgain = globalTick + 250;
-				return true;
-			}
-		} else if (creaturesToAttack.size() > 0) {
-			if (globalTick - lastTick >= perAttackTick()) {
-				bool reattack = false;
+		}
+		return false;
+	}
 
-				if (type == ADVENTURER) {
-					int a = 5;
-				}
-				int attackIndex;
-				for (unsigned i = 0; i < creaturesToAttack.size(); i++) {
-					if (creaturesToAttack[i]->index == lastAttackCreatureIndex) {
-						reattack = true;
-						attackIndex = i;
-						break;
-					}
-				}
-				if (!reattack) {
-					attackIndex = ran(creaturesToAttack.size());
-				}
-				lastAttackCreatureIndex = creaturesToAttack[attackIndex]->index;
+	bool tryToWander()
+	{
+		Pos p;
+		bool hasPos = false;
+		if (master) {
+			vector<Pos> npos;
+			doExplore<MAZE_W, MAZE_H>(master->pos, maze.walls, moveWeights, 3.0f, npos);
+			if (npos.size() > 0) {
+				p = npos[ran(npos.size())];
 
-				int damage = getWeaponDamage();
+				hasPos = findPath<MAZE_W, MAZE_H>(pos, p, maze.walls, moveWeights, 10000000.0f, npos);
+				if (hasPos && npos.size() == 1) hasPos = false;
 
-				char buff[128];
-				sprintf_s(buff, "%s#%d attacks %s#%d with its %s for %d damage!", name, index, creaturesToAttack[attackIndex]->name, creaturesToAttack[attackIndex]->index, weapon.name, damage);
-				pushMessage(buff);
-
-				for (unsigned i = 0; i < attackListeners.size(); i++) {
-					attackListeners[i]->attacked(this, creaturesToAttack[attackIndex], damage);
-				}
-				creaturesToAttack[attackIndex]->doDamage(damage);
-
-				lastTick = globalTick;
-				return true;
-			}
-		} else	if (creaturesToMove.size() > 0) {
-			if (wantsToRun) {
-				return false;
-			}
-			if (globalTick - lastTick >= perMoveTick()) {
-				Pos p = getAveragePos(creaturesToMove);
-
-				bool found = p != pos && findPath<MAZE_W, MAZE_H>(pos, p, maze.walls, moveWeights, 10000000.0f, targetPath);
-				if (found) {
-					moveToPos(targetPath[0]);
-					lastTick = globalTick;
-					return true;
-				} else {
-					for (unsigned i = 0; i < creaturesToMove.size(); i++) {
-
-						found = findPath<MAZE_W, MAZE_H>(pos, creaturesToMove[i]->pos, maze.walls, moveWeights, 10000000.0f, targetPath);
-						if (found) {
-							moveToPos(targetPath[0]);
-							lastTick = globalTick;
-							return true;
-						}
-					}
+				if (hasPos) {
+					p = npos[0];
 				}
 			}
-		} else if (hp < hpMax / 3) {
-			return false;
-		} else if (!hasTarget && explores) {
-			if (wantsToRun) {
-				return false;
-			}
-			findTarget();
-		} else if (wandersAround && tickToNextWander < globalTick &&  globalTick - lastTick >= perMoveTick()) {
-			Pos p;
-			bool hasPos = false;
-			if (master) {
-				vector<Pos> npos;
-				doExplore<MAZE_W, MAZE_H>(master->pos, maze.walls, moveWeights, 3.0f, npos);
-				if (npos.size() > 0) {
-					p = npos[ran(npos.size())];
-
-					hasPos = findPath<MAZE_W, MAZE_H>(pos, p, maze.walls, moveWeights, 10000000.0f, npos);
-					if (hasPos && npos.size() == 1) hasPos = false;
-
-					if (hasPos) {
-						p = npos[0];
-					}
-				}
-			}
-
-			if (!hasPos && allies.size() > 0) {
-				p = getAveragePos(allies);
-				vector<Pos> npos;
-				doExplore<MAZE_W, MAZE_H>(p, maze.walls, moveWeights, 3.0f, npos);
-				if (npos.size() > 0) {
-					p = npos[ran(npos.size())];
-					hasPos = findPath<MAZE_W, MAZE_H>(pos, p, maze.walls, moveWeights, 10000000.0f, npos);
-					if (hasPos && npos.size() == 1) hasPos = false;
-					if (hasPos) {
-						p = npos[0];
-					}
-				}
-			}
-
-			if (!hasPos) {
-				vector<Pos> npos;
-				doExplore<MAZE_W, MAZE_H>(pos, maze.walls, moveWeights, 3.0f, npos);
-				if (npos.size() > 0) {
-					hasPos = true;
-					p = npos[ran(npos.size())];
-					findPath<MAZE_W, MAZE_H>(pos, p, maze.walls, moveWeights, 10000000.0f, npos);
-					if (hasPos && npos.size() == 1) hasPos = false;
-					if (hasPos) p = npos[0];
-				}
-			}
-
-			tickToNextWander = globalTick + getWanderTime();
-			if (hasPos) {
-				moveToPos(p);
-				lastTick = globalTick;
-			}
-			return true;
-
 		}
 
+		if (!hasPos && allies.size() > 0) {
+			p = getAveragePos(allies);
+			vector<Pos> npos;
+			doExplore<MAZE_W, MAZE_H>(p, maze.walls, moveWeights, 3.0f, npos);
+			if (npos.size() > 0) {
+				p = npos[ran(npos.size())];
+				hasPos = findPath<MAZE_W, MAZE_H>(pos, p, maze.walls, moveWeights, 10000000.0f, npos);
+				if (hasPos && npos.size() == 1) hasPos = false;
+				if (hasPos) {
+					p = npos[0];
+				}
+			}
+		}
+
+		if (!hasPos) {
+			vector<Pos> npos;
+			doExplore<MAZE_W, MAZE_H>(pos, maze.walls, moveWeights, 3.0f, npos);
+			if (npos.size() > 0) {
+				hasPos = true;
+				p = npos[ran(npos.size())];
+				findPath<MAZE_W, MAZE_H>(pos, p, maze.walls, moveWeights, 10000000.0f, npos);
+				if (hasPos && npos.size() == 1) hasPos = false;
+				if (hasPos) p = npos[0];
+			}
+		}
+
+		tickToNextWander = globalTick + getWanderTime();
+		if (hasPos) {
+			moveToPos(p);
+			lastTick = globalTick;
+		}
+		return true;
+
+	}
+
+	bool tryToGoTarget()
+	{
 		if (hasTarget && globalTick - lastTick >= perMoveTick()) {
 			pathVal++;
 			if (pathVal == targetPath.size()) {
@@ -543,36 +655,14 @@ public:
 			moveToPos(targetPath[pathVal]);
 			return true;
 		}
-
 		return false;
 	}
 
-	void doDamage(int damage) {
-		damage -= DR;
-		if (damage < 1) damage = 1;
-		hp -= damage;
-		if (wantsToRun) {
-			if (pathVal == targetPath.size()) {
-				wantsToRun = false;
-				timeToRunAgain = globalTick + 250;
-			}
-		}
-		if (hp <= 0) {
-			hp = 0;
-			isDead = true;
-			maze.walls[pos.x][pos.y] = 0;
-			char buff[128];
-			sprintf_s(buff, "%s #%d dies!", name, index);
-			pushMessage(buff);
-		}
-	}
 
-	bool isEnemy(int type) {
-		if (type > 100 && this->type <= 100) {
-			return true;
-		} else if (type <= 100 && this->type > 100) {
-			return true;
-		}
-		return false;
-	}
+
+
+
+
+
+
 };

@@ -3,61 +3,64 @@
 #include "CreatureGen.h"
 
 extern Maze maze;
-bool generateCreature(Pos pos, Creature &c, int level, int modif, int type = GOBLIN) {
+Creature* generateCreature(Pos pos, int level, int modif, int type = GOBLIN) {
 	if (!maze.isPosValid3(pos) || maze.walls[pos.x][pos.y] != 0) {
-		return false;
+		return NULL;
 	}
 
-	if (creatures[0].visibleCells[pos.x][pos.y] == 1) {
-		return false;
+	if (creatures[0]->visibleCells[pos.x][pos.y] == 1) {
+		return NULL;
 	}
+	Creature* c = NULL;
 	if (type == GOBLIN) {
 		c = generateGoblin(level + ran(4) / 3);
 		if (modif == MAGE || modif == PRIEST) {
-			c.hpMax += 10 + 5 * level;
-			c.mpMax += 40 + 20 * level;
+			c->hpMax += 10 + 5 * level;
+			c->mpMax += 40 + 20 * level;
 			if (modif == PRIEST) {
-				c.skills.push_back(new HealSkill(&c));
-				strcat_s(c.name, " Priest");
-				c.pixel.color = getColorIndex(0, 4, 6);
+				c->skills.push_back(new HealSkill(c));
+				strcat_s(c->name, " Priest");
+				c->pixel.color = getColorIndex(0, 4, 6);
 			} else if (modif == MAGE) {
-				c.pixel.color = getColorIndex(4, 4, 2);
+				c->pixel.color = getColorIndex(6, 2, 4);
 				switch (ran(3)) {
 					case 0:
-						c.skills.push_back(new LightingSkill(&c));
+						c->skills.push_back(new LightingSkill(c));
 						break;
 					case 1:
-						c.skills.push_back(new IceBoltSkill(&c));
+						c->skills.push_back(new IceBoltSkill(c));
 						break;
 					case 2:
-						c.skills.push_back(new FireBallSkill(&c));
+						c->skills.push_back(new FireBallSkill(c));
 						break;
 				}
 
-				strcat_s(c.name, " Warlock");
+				strcat_s(c->name, " Warlock");
 			}
 		} else if (modif == ROGUE) {
-			c.pixel.color = getColorIndex(0, 3, 0);
-			c.hpMax += 10 + 5 * level;
-			c.mpMax += 30 + 10 * level;
-			c.movePerTick *= 0.8f;
-			c.skills.push_back(new PoisonBladeSkill(&c));
-			strcat_s(c.name, " Rogue");
+			c->pixel.color = getColorIndex(0, 3, 0);
+			c->hpMax += 10 + 5 * level;
+			c->mpMax += 30 + 10 * level;
+			c->movePerTick *= 0.8f;
+			c->skills.push_back(new PoisonBladeSkill(c));
+			strcat_s(c->name, " Rogue");
 		} else if (modif == FIGHTER) {
-			c.pixel.color = getColorIndex(2, 6, 2);
-			c.hpMax += 30 + 10 * level;
-			c.DR += 1;
-			c.weapon.minDamage = (int)(c.weapon.minDamage*1.1f);
-			c.weapon.maxDamage = (int)(c.weapon.maxDamage*1.1f);
-			strcat_s(c.name, " Berserker");
+			c->pixel.color = getColorIndex(2, 6, 2);
+			c->hpMax += 30 + 10 * level;
+			c->DR += 1;
+			c->weapon->minDamage = (int)(c->weapon->minDamage*1.2f);
+			c->weapon->maxDamage = (int)(c->weapon->maxDamage*1.2f);
+			strcat_s(c->name, " Berserker");
 		}
 	}
-	c.pos = pos;
-	return true;
+	if(c){
+		c->pos = pos;
+	}
+	return c;
 }
 
 
-bool generateCreatureGroup(Pos pos, vector<Creature> &group, int level, int type = GOBLIN) {
+bool generateCreatureGroup(Pos pos, vector<Creature*> &group, int level, int type = GOBLIN) {
 
 	if (!maze.isPosValid3(pos) || maze.walls[pos.x][pos.y] != 0) {
 		return false;
@@ -81,25 +84,25 @@ bool generateCreatureGroup(Pos pos, vector<Creature> &group, int level, int type
 		Pos p = npos[i];
 
 		if (globalVisible[p.x][p.y] == 0 && maze.walls[p.x][p.y] == 0) {
-			Creature c;
-
+			
 			bool modified = ran(2 - level / 2) == 0;
 			int modif = -1;
 			if (modified) modif = ran(4);
-			bool added = generateCreature(p, c, level, modif, type);
-			if (added) {
-				if (modified && masterIndex == -1) masterIndex = c.index;
+			Creature *c = generateCreature(p, level + modified?1:0, modif, type);
+			if (c) {
+				if (modified && masterIndex == -1) masterIndex = c->index;
 				ret = true;
 				group.push_back(c);
 				t--;
 			}
+
 		}
 		npos[i] = npos[j - 1];
 		j--;
 	}
 	for (unsigned i = 0; i < group.size(); i++) {
-		group[i].masterIndex = masterIndex;
-		group[i].reset(group[i].pos);
+		group[i]->masterIndex = masterIndex;
+		group[i]->reset(group[i]->pos);
 	}
 	return ret;
 }

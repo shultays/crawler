@@ -24,7 +24,7 @@ public:
 
 class Berserk : public Buff {
 public:
-	int damageMultBoost = 0;
+	int damageMultBoost;
 	Berserk(Creature* creature) : Buff(creature) {
 		strcpy_s(name, "Berserker");
 	}
@@ -49,11 +49,8 @@ public:
 	void tick(Creature* creature);
 };
 
-
-
 class SlowBuff : public Buff {
 public:
-	int damageMultBoost = 0;
 	int attackSlow;
 	int moveSlow;
 
@@ -77,7 +74,6 @@ public:
 	void tick(Creature* creature);
 };
 
-
 class DamageOverTime : public Buff {
 public:
 	float dotTick;
@@ -94,14 +90,13 @@ public:
 	}
 	void start(Creature* creature);
 	void end(Creature* creature);
-
 	void tick(Creature* creature);
 };
 
 
 class PoisonBladeBuff : public Buff, public AttackListener {
 public:
-	int poisonDamage = 0;
+	int poisonDamage;
 	float ticksPerDamage;
 	PoisonBladeBuff(Creature* creature) : Buff(creature) {
 		strcpy_s(name, "Poisoned Blade");

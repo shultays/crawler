@@ -73,7 +73,7 @@ void PoisonBladeBuff::start(Creature* creature) {
 	if (!ended) return;
 	ended = false;
 	char buff[128];
-	sprintf_s(buff, "%s#%d applies poison to its %s.", creature->name, creature->index, creature->weapon.name);
+	sprintf_s(buff, "%s#%d applies poison to its %s.", creature->name, creature->index, creature->weapon->name);
 	pushMessage(buff);
 
 	tickToDie = globalTick + 180.0f;
@@ -85,12 +85,13 @@ void PoisonBladeBuff::end(Creature* creature) {
 	ended = true;
 
 	char buff[128];
-	sprintf_s(buff, "%s#%d's %s is no longer poisoned.", creature->name, creature->index, creature->weapon.name);
+	sprintf_s(buff, "%s#%d's %s is no longer poisoned.", creature->name, creature->index, creature->weapon->name);
 	pushMessage(buff);
 
 	for (unsigned i = 0; i < creature->attackListeners.size(); i++) {
 		if (creature->attackListeners[i] == this) {
 			creature->attackListeners[i] = creature->attackListeners[creature->attackListeners.size() - 1];
+			creature->attackListeners.resize(creature->attackListeners.size()-1);
 			break;
 		}
 	}
@@ -285,7 +286,7 @@ void IceBoltSkill::doCast(Creature* creature, vector<Creature*>& allies, vector<
 }
 
 int PoisonBladeSkill::shouldCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove) {
-	if (enemies.size() > 0 && creature->weapon.type != 0) {
+	if (enemies.size() > 0 && creature->weapon->type != 0) {
 		return 5;
 	}
 	return 0;

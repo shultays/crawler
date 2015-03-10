@@ -528,19 +528,19 @@ Equipment* getGloves(int level) {
 			break;
 		case 1:
 			DR = 0 + ran(1 + (level - 2) / 6);
-			strcpy_s(e->name, "Shoes");
+			strcpy_s(e->name, "Cloth Gloves");
 			break;
 		case 2:
 			DR = 1 + ran(1 + (level - 2) / 4);
-			strcpy_s(e->name, "Leather Boots");
+			strcpy_s(e->name, "Leather Gloves");
 			break;
 		case 3:
 			DR = 1 + ran(2 + (level - 2) / 3);
-			strcpy_s(e->name, "Mail Boots");
+			strcpy_s(e->name, "Chain Gloves");
 			break;
 		case 4:
 			DR = 2 + ran(2 + (level - 2) / 3);
-			strcpy_s(e->name, "Plate Boots");
+			strcpy_s(e->name, "Gauntlets");
 			break;
 	}
 

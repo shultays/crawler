@@ -8,73 +8,48 @@ Skill::Skill(Creature* creature) {
 	timeToNextCast = globalTick;
 }
 
-
 void SlowBuff::start(Creature* creature) {
-	if (!ended) return;
-	ended = false;
 	char buff[128];
 	sprintf_s(buff, "%s#%d is slowed!", creature->name, creature->index);
 	pushMessage(buff);
-
-	attackSlow = creature->attackSpeedMult / 10;
-	creature->attackSpeedMult += attackSlow;
-	moveSlow = creature->moveSpeedMult / 10;
-	creature->moveSpeedMult += moveSlow;
-
-	tickToDie = globalTick + 120.0f;
+	BuffGroup::start(creature);
 }
 
 void SlowBuff::end(Creature* creature) {
-	if (ended) return;
-	ended = true;
-
-	creature->attackSpeedMult -= attackSlow;
-	creature->moveSpeedMult -= moveSlow;
-
 	char buff[128];
-	sprintf_s(buff, "%s#%d is no longer slowed.", creature->name, creature->index);
+	sprintf_s(buff, "%s#%d is no longer slowed", creature->name, creature->index);
 	pushMessage(buff);
+	BuffGroup::end(creature);
 }
-
-void SlowBuff::tick(Creature* creature) {}
 
 
 void Berserk::start(Creature* creature) {
 	if (!ended) return;
 	ended = false;
+	creature->fearless++;
 	char buff[128];
 	sprintf_s(buff, "%s#%d ENRAGES!", creature->name, creature->index);
 	pushMessage(buff);
-	ended = false;
-	creature->DR += 2;
-	creature->damageBoost += 5;
-
-	damageMultBoost = creature->damageMult / 10;
-	creature->damageMult += damageMultBoost;
-	creature->fearless++;
 	tickToDie = globalTick + 100.0f;
 }
 
 void Berserk::end(Creature* creature) {
 	if (ended) return;
 	ended = true;
-	creature->DR -= 2;
-	creature->damageBoost -= 5;
-	creature->damageMult -= damageMultBoost;
 	creature->fearless--;
 	char buff[128];
 	sprintf_s(buff, "%s#%d is now calm.", creature->name, creature->index);
 	pushMessage(buff);
 }
 
-void Berserk::tick(Creature* creature) {}
-
 void PoisonBladeBuff::start(Creature* creature) {
 	if (!ended) return;
 	ended = false;
-	char buff[128];
-	sprintf_s(buff, "%s#%d applies poison to its %s.", creature->name, creature->index, creature->weapon->name);
-	pushMessage(buff);
+	if (showText) {
+		char buff[128];
+		sprintf_s(buff, "%s#%d applies poison to its %s.", creature->name, creature->index, creature->weapon->name);
+		pushMessage(buff);
+	}
 
 	tickToDie = globalTick + 180.0f;
 	creature->attackListeners.push_back(this);
@@ -84,14 +59,16 @@ void PoisonBladeBuff::end(Creature* creature) {
 	if (ended) return;
 	ended = true;
 
-	char buff[128];
-	sprintf_s(buff, "%s#%d's %s is no longer poisoned.", creature->name, creature->index, creature->weapon->name);
-	pushMessage(buff);
+	if (showText) {
+		char buff[128];
+		sprintf_s(buff, "%s#%d's %s is no longer poisoned.", creature->name, creature->index, creature->weapon->name);
+		pushMessage(buff);
+	}
 
 	for (unsigned i = 0; i < creature->attackListeners.size(); i++) {
 		if (creature->attackListeners[i] == this) {
 			creature->attackListeners[i] = creature->attackListeners[creature->attackListeners.size() - 1];
-			creature->attackListeners.resize(creature->attackListeners.size()-1);
+			creature->attackListeners.resize(creature->attackListeners.size() - 1);
 			break;
 		}
 	}
@@ -105,7 +82,7 @@ void PoisonBladeBuff::attacked(Creature* attacker, Creature* defender, int damag
 			return;
 		}
 	}
-	DamageOverTime *dot = new DamageOverTime(defender);
+	DamageOverTime *dot = new DamageOverTime();
 
 	defender->buffs.push_back(dot);
 
@@ -138,14 +115,20 @@ void DamageOverTime::tick(Creature* creature) {
 	if (timeToNextDamage <= globalTick) {
 		timeToNextDamage = globalTick + dotTick;
 
-		char buff[128];
-		sprintf_s(buff, "%s is damaged for %d (%s)!", creature->name, dotDamage, name);
-		pushMessage(buff);
-		creature->doDamage(dotDamage);
+		if (dotDamage > 0) {
+			char buff[128];
+			sprintf_s(buff, "%s is damaged for %d (%s)!", creature->name, dotDamage, name);
+			pushMessage(buff);
+			creature->doDamage(dotDamage);
+		} else {
+			char buff[128];
+			sprintf_s(buff, "%s is healed for %d (%s)!", creature->name, -dotDamage, name);
+			pushMessage(buff);
+			creature->heal(-dotDamage);
+		}
 	}
 }
 
-void PoisonBladeBuff::tick(Creature* creature) {}
 
 int BerserkSkill::shouldCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove) {
 	if (enemiesToAttack.size() >= 3 && enemies.size() >= 5) {
@@ -160,7 +143,7 @@ int BerserkSkill::shouldCast(Creature* creature, vector<Creature*>& allies, vect
 }
 
 void BerserkSkill::doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove) {
-	Buff* b = new Berserk(creature);
+	Buff* b = new Berserk();
 	creature->buffs.push_back(b);
 
 	char buff[128];
@@ -249,7 +232,7 @@ void FireBallSkill::doCast(Creature* creature, vector<Creature*>& allies, vector
 	pushMessage(buff);
 	creatureToCast->doDamage(damage);
 
-	DamageOverTime *dot = new DamageOverTime(creatureToCast);
+	DamageOverTime *dot = new DamageOverTime();
 
 	creatureToCast->buffs.push_back(dot);
 
@@ -276,7 +259,7 @@ void IceBoltSkill::doCast(Creature* creature, vector<Creature*>& allies, vector<
 	pushMessage(buff);
 	creatureToCast->doDamage(damage);
 
-	SlowBuff *slow = new SlowBuff(creatureToCast);
+	SlowBuff *slow = new SlowBuff();
 
 	creatureToCast->buffs.push_back(slow);
 	slow->tickToDie = globalTick + 100.0f;
@@ -292,11 +275,188 @@ int PoisonBladeSkill::shouldCast(Creature* creature, vector<Creature*>& allies, 
 	return 0;
 }
 
-
 void PoisonBladeSkill::doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove) {
-	PoisonBladeBuff* buff = new PoisonBladeBuff(creature);
+	PoisonBladeBuff* buff = new PoisonBladeBuff(poisonDamage);
+	buff->showText = true;
 	creature->buffs.push_back(buff);
 	buff->start(creature);
 	timeToNextCast = globalTick + delayToNextCast;
 }
 
+///
+
+void DRBuff::start(Creature* creature) {
+	if (!ended) return;
+	ended = false;
+	creature->DR += buff;
+}
+
+void DRBuff::end(Creature* creature) {
+	if (ended) return;
+	ended = true;
+	creature->DR -= buff;
+}
+
+void ConstantDMGBoost::start(Creature* creature) {
+	if (!ended) return;
+	ended = false;
+	creature->damageBoost += buff;
+}
+
+void ConstantDMGBoost::end(Creature* creature) {
+	if (ended) return;
+	ended = true;
+	creature->damageBoost -= buff;
+}
+
+void DMGBultBuff::start(Creature* creature) {
+	if (!ended) return;
+	ended = false;
+	addedBuff = (int)((creature->damageMult / 100.0f)* (buff - 100));
+	creature->damageMult += addedBuff;
+}
+
+void DMGBultBuff::end(Creature* creature) {
+	if (ended) return;
+	ended = true;
+	creature->damageMult -= addedBuff;
+}
+
+void SightBuff::start(Creature* creature) {
+	if (!ended) return;
+	ended = false;
+	addedBuff = (int)((creature->sightMult / 100.0f)* (buff - 100));
+	creature->sightMult += addedBuff;
+}
+
+void SightBuff::end(Creature* creature) {
+	if (ended) return;
+	ended = true;
+	creature->sightMult -= addedBuff;
+}
+
+void AtkSpeedBuff::start(Creature* creature) {
+	if (!ended) return;
+	ended = false;
+	addedBuff = (int)((creature->attackSpeedMult / 100.0f)* (buff - 100));
+	creature->attackSpeedMult += addedBuff;
+}
+
+void AtkSpeedBuff::end(Creature* creature) {
+	if (ended) return;
+	ended = true;
+	creature->attackSpeedMult -= addedBuff;
+}
+
+void MoveSpeedBuff::start(Creature* creature) {
+	if (!ended) return;
+	ended = false;
+	addedBuff = (int)((creature->moveSpeedMult / 100.0f)* (buff - 100));
+	creature->moveSpeedMult += addedBuff;
+}
+
+void MoveSpeedBuff::end(Creature* creature) {
+	if (ended) return;
+	ended = true;
+	creature->moveSpeedMult -= addedBuff;
+}
+
+void PlusDamageBuff::start(Creature* creature) {
+	if (!ended) return;
+	ended = false;
+	creature->attackListeners.push_back(this);
+}
+
+void PlusDamageBuff::end(Creature* creature) {
+	if (ended) return;
+	ended = true;
+	for (unsigned i = 0; i < creature->attackListeners.size(); i++) {
+		if (creature->attackListeners[i] == this) {
+			creature->attackListeners[i] = creature->attackListeners[creature->attackListeners.size() - 1];
+			creature->attackListeners.resize(creature->attackListeners.size() - 1);
+			break;
+		}
+	}
+}
+
+void PlusDamageBuff::attacked(Creature* attacker, Creature* defender, int damage) {
+	if (ended) return;
+	int extra = rani(minDamage, maxDamage);
+
+	char buff[128];
+	sprintf_s(buff, "%s#%d does extra %d %s damage!", attacker->name, attacker->index, extra, damageType);
+	pushMessage(buff);
+	defender->doDamage(extra);
+}
+
+void EvasionBuff::start(Creature* creature) {
+	if (!ended) return;
+	ended = false;
+	addedBuff = (int)((creature->chanceToHit / 100.0f)* (buff - 100));
+	creature->chanceToHit += addedBuff;
+}
+
+void EvasionBuff::end(Creature* creature) {
+	if (ended) return;
+	ended = true;
+	creature->chanceToHit -= addedBuff;
+}
+
+void HpRegenBuff::start(Creature* creature) {
+	if (!ended) return;
+	ended = false;
+	addedBuff = (int)((creature->hpRegenMult / 100.0f)* (buff - 100));
+	creature->hpRegenMult += addedBuff;
+}
+
+void HpRegenBuff::end(Creature* creature) {
+	if (ended) return;
+	ended = true;
+	creature->hpRegenMult -= addedBuff;
+}
+
+void MpRegenBuff::start(Creature* creature) {
+	if (!ended) return;
+	ended = false;
+	addedBuff = (int)((creature->mpRegenMult / 100.0f)* (buff - 100));
+	creature->mpRegenMult += addedBuff;
+}
+
+void MpRegenBuff::end(Creature* creature) {
+	if (ended) return;
+	ended = true;
+	creature->mpRegenMult -= addedBuff;
+}
+
+
+void HpBuff::start(Creature* creature) {
+	if (!ended) return;
+	ended = false;
+	creature->hp *= (creature->hpMax + buff) / creature->hpMax;
+	creature->hpMax += buff;
+}
+
+void HpBuff::end(Creature* creature) {
+	if (ended) return;
+	ended = true;
+	creature->hp *= (creature->hpMax - buff) / creature->hpMax;
+	creature->hpMax -= buff;
+	if (creature->hp > creature->hpMax) creature->hp = creature->hpMax;
+}
+
+void MpBuff::start(Creature* creature) {
+	if (!ended) return;
+	ended = false;
+	if (creature->mpMax) {
+		creature->mp *= (creature->mpMax + buff) / creature->mpMax;
+	}
+	creature->mpMax += buff;
+}
+
+void MpBuff::end(Creature* creature) {
+	if (ended) return;
+	ended = true;
+	creature->mp *= (creature->mpMax - buff) / creature->mpMax;
+	creature->mpMax -= buff;
+	if (creature->mp > creature->mpMax) creature->mp = creature->mpMax;
+}

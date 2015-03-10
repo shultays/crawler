@@ -49,7 +49,6 @@ extern unordered_map<int, float> seeWeights;
 
 #define DIAG_MUL 1.41421356237f
 
-
 #define ADVENTURER 11
 #define ADVENTURER_ALLY 12
 
@@ -100,15 +99,27 @@ public:
 };
 
 
+#define WEAPON 0
+#define ARMOR 1
+#define SHIELD 2
+#define HELM 3
+#define GLOVES 4
+#define BOOTS 5
+#define RING 6
+#define AMULET 7
+#define EQ_MAX 8
+
+extern char eqipmentNames[EQ_MAX][32];
+
 extern int messagePos;
 extern char messages[MAX_MESSAGE][128];
 extern int globalVisible[MAZE_W][MAZE_H];
+
 class Node {
 public:
 	Pos pos;
 	int dir;
 	float path;
-
 
 	Node(int x, int y) {
 		pos.x = x;
@@ -124,7 +135,6 @@ public:
 	}
 
 };
-
 
 int dist(Pos& p1, Pos& p2);
 int getReverseDir(int dir);
@@ -241,5 +251,35 @@ void pushMessage(char *str);
 
 void msleep(int sleepMS);
 
-
 unsigned mtime();
+
+
+enum {
+	NO_BUFF = 0,
+	ATK_SPEED,
+	MV_SPEED,
+	DR_ADD,
+	ATK_DMG,
+	ATK_MUL,
+	SIGHT,
+	POISONED,
+	FIRE_DAMAGE,
+	LIGHTING_DAMAGE,
+	ICE_DAMAGE,
+	EVASION,
+	BLOCK,
+	HP,
+	MP,
+	HP_REGEN,
+	MP_REGEN,
+
+	BUFF_CNT
+};
+
+extern char buffNamers[BUFF_CNT][32];
+extern char firstBuffNamers[BUFF_CNT][32];
+
+class Buff;
+
+Buff* getBuff(vector<int>& weights, int level);
+

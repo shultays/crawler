@@ -8,6 +8,7 @@
 #include"MazeActions.h"
 #include<time.h>
 
+
 float globalTick = 0;
 float realTick = 0;
 WINDOW * win;
@@ -49,11 +50,20 @@ void resetGame() {
 	creatures[0]->mpMax = creatures[0]->mp = 100;
 	creatures[0]->level = 1;
 	strcpy_s(creatures[0]->name, "Adventurer");
-	creatures[0]->weapon = getWeapon(5);	
-	creatures[0]->armor = getArmor(4);	
 	creatures[0]->tickToRegen = 120.0f;
 
 	creatures[0]->reset(Pos(maze.roomPos[0].x, maze.roomPos[0].y));
+
+	creatures[0]->equip(getWeapon(5));
+	creatures[0]->equip(getArmor(4));
+	creatures[0]->equip(getHelm(3));
+	creatures[0]->equip(getShield(3));
+	creatures[0]->equip(getBoots(3));
+	creatures[0]->equip(getGloves(3));
+	creatures[0]->equip(getRing(3));
+	creatures[0]->equip(getRing(3));
+	creatures[0]->equip(getAmulet(3));
+
 	creatures[0]->skills.push_back(new BerserkSkill(creatures[0]));
 
 	pushMessage("Wild Adventurer appeared!");
@@ -84,9 +94,9 @@ bool control(int i) {
 	bool moved = false;
 	Pos newP;
 	switch (i) {
-	case 27:
-		exit(0);
-		break;
+		case 27:
+			exit(0);
+			break;
 		case 'r':
 			resetGame();
 			break;
@@ -101,7 +111,6 @@ bool control(int i) {
 			if (!tickGame) {
 				Creature* c;
 				if (c = generateCreature(cursor, 1, ran(4))) {
-					c->reset(c->pos);
 					creatures.push_back(c);
 				}
 			}
@@ -153,7 +162,7 @@ void gameRefresh() {
 	int row, col;
 	getmaxyx(stdscr, row, col);
 	mazeWindow.windowSize.x = row - 15;
-	mazeWindow.windowSize.y = col - 35;
+	mazeWindow.windowSize.y = col - 45;
 
 	for (int i = 0; i < MAZE_W; i++) {
 		for (int j = 0; j < MAZE_H; j++) {
@@ -220,7 +229,16 @@ void gameRefresh() {
 		}
 		x++;
 		attrset(COLOR_PAIR(getColorIndex(4, 4, 4)));
-		mvprintw(x++, y, "EYE : %d", (int)creatureToShow->getSight());
+		if (creatureToShow->chanceToHit < 1000) {
+			mvprintw(x++, y, "EVSN/BLK : %%%d", 100 - (int)creatureToShow->chanceToHit / 10);
+		}
+		if (creatureToShow->hpRegenMult != 1000) {
+			mvprintw(x++, y, "%HP RGN : %%%d", (int)creatureToShow->hpRegenMult / 10);
+		}
+		if (creatureToShow->mpRegenMult != 1000) {
+			mvprintw(x++, y, "%MP RGN : %%%d", (int)creatureToShow->mpRegenMult / 10);
+		}
+		mvprintw(x++, y, "SGHT : %d", (int)creatureToShow->getSight());
 		mvprintw(x++, y, "MV SPD : %d", (int)creatureToShow->perMoveTick());
 		mvprintw(x++, y, "ATK SPD : %d", (int)creatureToShow->perAttackTick());
 
@@ -229,26 +247,42 @@ void gameRefresh() {
 		mvprintw(x++, y, "Inventory", (int)creatureToShow->perMoveTick());
 		x++;
 
-		if(creatureToShow->weapon->type != 0){
+		if (creatureToShow->weapon->type != 0) {
 			mvprintw(x++, y, "WPN : %s", creatureToShow->weapon->name);
 			mvprintw(x++, y, "DMG : %d - %d", creatureToShow->weapon->minDamage, creatureToShow->weapon->maxDamage);
 			mvprintw(x++, y, "ATK SPD : %d", (int)creatureToShow->weapon->swingTime);
 			mvprintw(x++, y, "RNG : %d", creatureToShow->weapon->range);
-			x++;
-		}
-
-		if(creatureToShow->armor->type != 0){
-
-			mvprintw(x++, y, "ARM : %s", creatureToShow->armor->name);
-			mvprintw(x++, y, "DR : %d", creatureToShow->armor->DR);
-			attrset(COLOR_PAIR(getColorIndex(7, 0, 0)));
-			int slow = (int)(100*creatureToShow->armor->slowness)-100;
-			if(slow != 0){
-				mvprintw(x++, y, "SLW : +%%%d", (int)(100*creatureToShow->armor->slowness)-100);
+			if (creatureToShow->weapon->buffGroup) {
+				creatureToShow->weapon->buffGroup->printStats(creatureToShow, x, y);
 			}
-			attrset(COLOR_PAIR(getColorIndex(4, 4, 4)));
 			x++;
 		}
+
+		for (unsigned i = 1; i < creatureToShow->eqipmentSlots.size(); i++) {
+			for (unsigned j = 0; j < creatureToShow->eqipmentSlots[i].size(); j++) {
+				if (creatureToShow->eqipmentSlots[i][j] != NULL) {
+					attrset(COLOR_PAIR(getColorIndex(4, 4, 4)));
+					mvprintw(x++, y, "%s : %s", eqipmentNames[i], creatureToShow->eqipmentSlots[i][j]->name);
+					if (creatureToShow->eqipmentSlots[i][j]->buffGroup) {
+						creatureToShow->eqipmentSlots[i][j]->buffGroup->printStats(creatureToShow, x, y);
+					}
+					x++;
+				}
+			}
+		}
+		/*
+		if (creatureToShow->armor->type != 0) {
+
+		mvprintw(x++, y, "ARM : %s", creatureToShow->armor->name);
+		mvprintw(x++, y, "DR : %d", creatureToShow->armor->DR);
+		attrset(COLOR_PAIR(getColorIndex(7, 0, 0)));
+		int slow = (int)(100 * creatureToShow->armor->slowness) - 100;
+		if (slow != 0) {
+		mvprintw(x++, y, "SLW : +%%%d", (int)(100 * creatureToShow->armor->slowness) - 100);
+		}
+		attrset(COLOR_PAIR(getColorIndex(4, 4, 4)));
+		x++;
+		}*/
 
 		x++;
 		for (unsigned i = 0; i < creatureToShow->buffs.size(); i++) {
@@ -323,7 +357,7 @@ int WINAPI  WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 	nodelay(win, true);
 	curs_set(0);
 
-	resize_term(45, 110);
+	resize_term(45, 120);
 
 	resetGame();
 
@@ -349,7 +383,7 @@ int WINAPI  WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
 	//scrollok(win, false);
 
-	
+
 	while (true) {
 		int i;
 		unsigned time = mtime();

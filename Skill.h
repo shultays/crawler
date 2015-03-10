@@ -10,68 +10,475 @@ public:
 	int buffIndex;
 	char name[32];
 	bool ended;
+	bool showText;
 	float tickToDie;
-	Buff(Creature* creature) {
+	Buff() {
 		ended = true;
+		showText = false;
 		buffIndex = nextBuffIndex++;
 	}
 	virtual void start(Creature* creature) = 0;
 	virtual void end(Creature* creature) = 0;
 	virtual void tick(Creature* creature) = 0;
 	virtual void printStats(Creature* creature, int &x, int &y) = 0;
-
+	virtual int goodness() = 0;
+	virtual ~Buff() {}
 };
 
-class Berserk : public Buff {
+class DRBuff : public Buff {
 public:
-	int damageMultBoost;
-	Berserk(Creature* creature) : Buff(creature) {
+	int buff;
+
+	DRBuff(int buff) : Buff() {
+		name[0] = 0;
+		this->buff = buff;
+	}
+
+	void printStats(Creature* creature, int &x, int &y) {
+		int good = goodness();
+		attrset(COLOR_PAIR(getColorIndex(good <= 0 ? 7 : 0, good >= 0 ? 7 : 0, 0)));
+
+		int ypush = 0;
+		if (name[0]) {
+			mvprintw(x++, y + 2, "%s", name);
+			ypush = 1;
+		}
+		mvaddch(x, y + ypush, good ? ACS_UARROW : ACS_DARROW);
+		mvprintw(x++, y + 2 + ypush, "DR : %c%d", good ? '+' : '-', abs(buff));
+	}
+
+	void start(Creature* creature);
+	void end(Creature* creature);
+	void tick(Creature* creature) {}
+
+	int goodness() {
+		return buff;
+	}
+};
+
+class HpBuff : public Buff {
+public:
+	int buff;
+
+	HpBuff(int buff) : Buff() {
+		name[0] = 0;
+		this->buff = buff;
+	}
+
+	void printStats(Creature* creature, int &x, int &y) {
+		int good = goodness();
+		attrset(COLOR_PAIR(getColorIndex(good <= 0 ? 7 : 0, good >= 0 ? 7 : 0, 0)));
+
+		int ypush = 0;
+		if (name[0]) {
+			mvprintw(x++, y + 2, "%s", name);
+			ypush = 1;
+		}
+		mvaddch(x, y + ypush, good ? ACS_UARROW : ACS_DARROW);
+		mvprintw(x++, y + 2 + ypush, "HP : %c%d", good ? '+' : '-', abs(buff));
+	}
+
+	void start(Creature* creature);
+	void end(Creature* creature);
+	void tick(Creature* creature) {}
+
+	int goodness() {
+		return buff;
+	}
+};
+class MpBuff : public Buff {
+public:
+	int buff;
+
+	MpBuff(int buff) : Buff() {
+		name[0] = 0;
+		this->buff = buff;
+	}
+
+	void printStats(Creature* creature, int &x, int &y) {
+		int good = goodness();
+		attrset(COLOR_PAIR(getColorIndex(good <= 0 ? 7 : 0, good >= 0 ? 7 : 0, 0)));
+
+		int ypush = 0;
+		if (name[0]) {
+			mvprintw(x++, y + 2, "%s", name);
+			ypush = 1;
+		}
+		mvaddch(x, y + ypush, good ? ACS_UARROW : ACS_DARROW);
+		mvprintw(x++, y + 2 + ypush, "MP : %c%d", good ? '+' : '-', abs(buff));
+	}
+
+	void start(Creature* creature);
+	void end(Creature* creature);
+	void tick(Creature* creature) {}
+
+	int goodness() {
+		return buff;
+	}
+};
+class ConstantDMGBoost : public Buff {
+public:
+	int buff;
+
+	ConstantDMGBoost(int buff) : Buff() {
+		name[0] = 0;
+		this->buff = buff;
+	}
+
+	void printStats(Creature* creature, int &x, int &y) {
+		int good = goodness();
+		attrset(COLOR_PAIR(getColorIndex(good <= 0 ? 7 : 0, good >= 0 ? 7 : 0, 0)));
+
+		int ypush = 0;
+		if (name[0]) {
+			mvprintw(x++, y + 2, "%s", name);
+			ypush = 1;
+		}
+		mvaddch(x, y + ypush, good ? ACS_UARROW : ACS_DARROW);
+		mvprintw(x++, y + 2 + ypush, "DMG : %c%d", good ? '+' : '-', abs(buff));
+	}
+
+	void start(Creature* creature);
+	void end(Creature* creature);
+	void tick(Creature* creature) {}
+
+	int goodness() {
+		return buff;
+	}
+};
+
+class DMGBultBuff : public Buff {
+public:
+	int buff;
+
+	int addedBuff;
+
+	DMGBultBuff(int buff) : Buff() {
+		name[0] = 0;
+		this->buff = buff;
+	}
+
+	void printStats(Creature* creature, int &x, int &y) {
+		int g = goodness();
+
+		attrset(COLOR_PAIR(getColorIndex(g <= 0 ? 7 : 0, g >= 0 ? 7 : 0, 0)));
+
+		int ypush = 0;
+		if (name[0]) {
+			mvprintw(x++, y + 2, "%s", name);
+			ypush = 1;
+		}
+		mvaddch(x, y + ypush, g > 0 ? ACS_UARROW : ACS_DARROW);
+		mvprintw(x++, y + 2 + ypush, "DMG MLT : %c%%%d", (buff - 100) > 0 ? '+' : '-', abs(buff - 100));
+	}
+
+	void start(Creature* creature);
+	void end(Creature* creature);
+	void tick(Creature* creature) {}
+
+	int goodness() {
+		return buff - 100;
+	}
+};
+
+class MoveSpeedBuff : public Buff {
+public:
+	int buff;
+
+	int addedBuff;
+
+	MoveSpeedBuff(int buff) : Buff() {
+		name[0] = 0;
+		this->buff = buff;
+	}
+
+	void printStats(Creature* creature, int &x, int &y) {
+		int g = goodness();
+
+		attrset(COLOR_PAIR(getColorIndex(g <= 0 ? 7 : 0, g >= 0 ? 7 : 0, 0)));
+
+		int ypush = 0;
+		if (name[0]) {
+			mvprintw(x++, y + 2, "%s", name);
+			ypush = 1;
+		}
+		mvaddch(x, y + ypush, g > 0 ? ACS_UARROW : ACS_DARROW);
+		mvprintw(x++, y + 2 + ypush, "MV SPD : %c%%%d", (buff - 100) > 0 ? '+' : '-', abs(buff - 100));
+	}
+
+	void start(Creature* creature);
+	void end(Creature* creature);
+	void tick(Creature* creature) {}
+
+	int goodness() {
+		return 100 - buff;
+	}
+};
+
+class AtkSpeedBuff : public Buff {
+public:
+	int buff;
+
+	int addedBuff;
+
+	AtkSpeedBuff(int buff) : Buff() {
+		name[0] = 0;
+		this->buff = buff;
+	}
+
+	void printStats(Creature* creature, int &x, int &y) {
+		int g = goodness();
+
+		attrset(COLOR_PAIR(getColorIndex(g <= 0 ? 7 : 0, g >= 0 ? 7 : 0, 0)));
+
+		int ypush = 0;
+		if (name[0]) {
+			mvprintw(x++, y + 2, "%s", name);
+			ypush = 1;
+		}
+		mvaddch(x, y + ypush, g > 0 ? ACS_UARROW : ACS_DARROW);
+		mvprintw(x++, y + 2 + ypush, "ATK SPD : %c%%%d", (buff - 100) > 0 ? '+' : '-', abs(buff - 100));
+	}
+
+	void start(Creature* creature);
+	void end(Creature* creature);
+	void tick(Creature* creature) {}
+
+	int goodness() {
+		return 100 - buff;
+	}
+};
+
+class SightBuff : public Buff {
+public:
+	int buff;
+
+	int addedBuff;
+
+	SightBuff(int buff) : Buff() {
+		name[0] = 0;
+		this->buff = buff;
+	}
+
+	void printStats(Creature* creature, int &x, int &y) {
+		int g = goodness();
+
+		attrset(COLOR_PAIR(getColorIndex(g <= 0 ? 7 : 0, g >= 0 ? 7 : 0, 0)));
+
+		int ypush = 0;
+		if (name[0]) {
+			mvprintw(x++, y + 2, "%s", name);
+			ypush = 1;
+		}
+		mvaddch(x, y + ypush, g > 0 ? ACS_UARROW : ACS_DARROW);
+		mvprintw(x++, y + 2 + ypush, "Sight : %c%%%d", (buff - 100) > 0 ? '+' : '-', abs(buff - 100));
+	}
+
+	void start(Creature* creature);
+	void end(Creature* creature);
+	void tick(Creature* creature) {}
+
+	int goodness() {
+		return buff - 100;
+	}
+};
+
+class EvasionBuff : public Buff {
+public:
+	int buff;
+	int addedBuff;
+	bool isBlock;
+
+	EvasionBuff(int buff, bool isBlock = false) : Buff() {
+		name[0] = 0;
+		this->buff = buff;
+		this->isBlock = isBlock;
+	}
+
+	void printStats(Creature* creature, int &x, int &y) {
+		int g = goodness();
+
+		attrset(COLOR_PAIR(getColorIndex(g <= 0 ? 7 : 0, g >= 0 ? 7 : 0, 0)));
+
+		int ypush = 0;
+		if (name[0]) {
+			mvprintw(x++, y + 2, "%s", name);
+			ypush = 1;
+		}
+		mvaddch(x, y + ypush, g > 0 ? ACS_UARROW : ACS_DARROW);
+		mvprintw(x++, y + 2 + ypush, "%s : %c%%%d", isBlock ? "%BLCK" : "%EVSN", (buff - 100) > 0 ? '+' : '-', abs(buff - 100));
+	}
+
+	void start(Creature* creature);
+	void end(Creature* creature);
+	void tick(Creature* creature) {}
+
+	int goodness() {
+		return  buff - 100;
+	}
+};
+
+
+class HpRegenBuff : public Buff {
+public:
+	int buff;
+
+	int addedBuff;
+
+	HpRegenBuff(int buff) : Buff() {
+		name[0] = 0;
+		this->buff = buff;
+	}
+
+	void printStats(Creature* creature, int &x, int &y) {
+		int g = goodness();
+
+		attrset(COLOR_PAIR(getColorIndex(g <= 0 ? 7 : 0, g >= 0 ? 7 : 0, 0)));
+
+		int ypush = 0;
+		if (name[0]) {
+			mvprintw(x++, y + 2, "%s", name);
+			ypush = 1;
+		}
+		mvaddch(x, y + ypush, g > 0 ? ACS_UARROW : ACS_DARROW);
+		mvprintw(x++, y + 2 + ypush, "HP RGN : %c%%%d", (buff - 100) > 0 ? '+' : '-', abs(buff - 100));
+	}
+
+	void start(Creature* creature);
+	void end(Creature* creature);
+	void tick(Creature* creature) {}
+
+	int goodness() {
+		return buff - 100;
+	}
+};
+
+class MpRegenBuff : public Buff {
+public:
+	int buff;
+
+	int addedBuff;
+
+	MpRegenBuff(int buff) : Buff() {
+		name[0] = 0;
+		this->buff = buff;
+	}
+
+	void printStats(Creature* creature, int &x, int &y) {
+		int g = goodness();
+
+		attrset(COLOR_PAIR(getColorIndex(g <= 0 ? 7 : 0, g >= 0 ? 7 : 0, 0)));
+
+		int ypush = 0;
+		if (name[0]) {
+			mvprintw(x++, y + 2, "%s", name);
+			ypush = 1;
+		}
+		mvaddch(x, y + ypush, g > 0 ? ACS_UARROW : ACS_DARROW);
+		mvprintw(x++, y + 2 + ypush, "MP RGN : %c%%%d", (buff - 100) > 0 ? '+' : '-', abs(buff - 100));
+	}
+
+	void start(Creature* creature);
+	void end(Creature* creature);
+	void tick(Creature* creature) {}
+
+	int goodness() {
+		return buff - 100;
+	}
+};
+
+class BuffGroup : public Buff {
+public:
+	vector<Buff*> buffs;
+	BuffGroup() : Buff() {
+		name[0] = '\0';
+	}
+	virtual ~BuffGroup() {
+		for (unsigned i = 0; i < buffs.size(); i++) {
+			delete buffs[i];
+		}
+	}
+
+	void printStats(Creature* creature, int &x, int &y) {
+		int shift = 0;
+		if (name[0]) {
+			int g = goodness();
+			attrset(COLOR_PAIR(getColorIndex(g <= 0 ? 7 : 0, g >= 0 ? 7 : 0, 0)));
+			mvprintw(x++, y, "%s", name);
+			shift = 1;
+		}
+
+		int t = y + shift;
+		for (unsigned i = 0; i < buffs.size(); i++) {
+			buffs[i]->printStats(creature, x, t);
+		}
+	}
+
+	void start(Creature* creature) {
+		if (!ended) return;
+		ended = false;
+		for (unsigned i = 0; i < buffs.size(); i++) {
+			buffs[i]->start(creature);
+		}
+	}
+	void end(Creature* creature) {
+		if (ended) return;
+		ended = true;
+		for (unsigned i = 0; i < buffs.size(); i++) {
+			buffs[i]->end(creature);
+		}
+	}
+	void tick(Creature* creature) {
+		for (unsigned i = 0; i < buffs.size(); i++) {
+			buffs[i]->tick(creature);
+		}
+	}
+
+	int goodness() {
+		int g = 0;
+		for (unsigned i = 0; i < buffs.size(); i++) {
+			int t = buffs[i]->goodness();
+			g += t > 0;
+			g -= t < 0;
+		}
+		return g;
+	}
+};
+
+class Berserk : public BuffGroup {
+public:
+	Berserk() : BuffGroup() {
 		strcpy_s(name, "Berserker");
+		buffs.push_back(new AtkSpeedBuff(90));
+		buffs.push_back(new DRBuff(4));
+		buffs.push_back(new ConstantDMGBoost(5));
+		buffs.push_back(new DMGBultBuff(110));
 	}
 
 	void printStats(Creature* creature, int &x, int &y) {
-		attrset(COLOR_PAIR(getColorIndex(0, 7, 0)));
-		mvaddch(x + 1, y, ACS_UARROW);
-		mvaddch(x + 2, y, ACS_UARROW);
-		mvaddch(x + 3, y, ACS_UARROW);
-
-		mvprintw(x++, y, "%s", name);
-		mvprintw(x++, y + 2, "DR : %d", 2);
-		mvprintw(x++, y + 2, "DMG BST : +%d", 5);
-		mvprintw(x++, y + 2, "DMG MLT : +%%%d", 10);
+		BuffGroup::printStats(creature, x, y);
 		attrset(COLOR_PAIR(getColorIndex(7, 0, 0)));
-		mvprintw(x++, y + 2, "FEARLESS");
+		mvprintw(x++, y + 3, "FEARLESS");
 	}
 
 	void start(Creature* creature);
 	void end(Creature* creature);
+	void tick(Creature* creature) {}
 
-	void tick(Creature* creature);
+	int goodness() { return 1; }
 };
 
-class SlowBuff : public Buff {
+class SlowBuff : public BuffGroup {
 public:
-	int attackSlow;
-	int moveSlow;
-
-	SlowBuff(Creature* creature) : Buff(creature) {
+	SlowBuff(int atkPer = 110, int mvPer = 110) : BuffGroup() {
 		strcpy_s(name, "Slowed");
+		buffs.push_back(new AtkSpeedBuff(atkPer));
+		buffs.push_back(new MoveSpeedBuff(mvPer));
 	}
 
-	void printStats(Creature* creature, int &x, int &y) {
-		attrset(COLOR_PAIR(getColorIndex(7, 0, 0)));
-		mvaddch(x + 1, y, ACS_DARROW);
-		mvaddch(x + 2, y, ACS_DARROW);
+	void SlowBuff::start(Creature* creature);
 
-		mvprintw(x++, y, "%s", name);
-		mvprintw(x++, y + 2, "ATK SPD : +%%%d", 10);
-		mvprintw(x++, y + 2, "MV SPD : +%%%d", 10);
-	}
-
-	void start(Creature* creature);
-	void end(Creature* creature);
-
-	void tick(Creature* creature);
+	void SlowBuff::end(Creature* creature);
 };
 
 class DamageOverTime : public Buff {
@@ -80,43 +487,71 @@ public:
 	float timeToNextDamage;
 	int dotDamage;
 
-	DamageOverTime(Creature* creature) : Buff(creature) {
+	DamageOverTime() : Buff() {
 		strcpy_s(name, "");
 	}
 
 	void printStats(Creature* creature, int &x, int &y) {
-		attrset(COLOR_PAIR(getColorIndex(7, 0, 0)));
+		attrset(COLOR_PAIR(getColorIndex(goodness() > 0 ? 0 : 7, goodness() < 0 ? 7 : 0, 0)));
 		mvprintw(x++, y, "%s", name);
 	}
 	void start(Creature* creature);
 	void end(Creature* creature);
 	void tick(Creature* creature);
-};
 
+	int goodness() { return -dotDamage; }
+};
 
 class PoisonBladeBuff : public Buff, public AttackListener {
 public:
 	int poisonDamage;
 	float ticksPerDamage;
-	PoisonBladeBuff(Creature* creature) : Buff(creature) {
+	PoisonBladeBuff(int poisonDamage = 4) : Buff() {
 		strcpy_s(name, "Poisoned Blade");
-		poisonDamage = 4;
+		this->poisonDamage = poisonDamage;
 		ticksPerDamage = 30;
 	}
 
 	void printStats(Creature* creature, int &x, int &y) {
 		attrset(COLOR_PAIR(getColorIndex(0, 7, 0)));
-
 		mvprintw(x++, y, "%s", name);
 	}
 
 	void start(Creature* creature);
 	void end(Creature* creature);
+	void tick(Creature* creature) {}
 
-	void tick(Creature* creature);
-
+	int goodness() { return 1; }
 
 	void PoisonBladeBuff::attacked(Creature* attacker, Creature* defender, int damage);
+};
+
+class PlusDamageBuff : public Buff, public AttackListener {
+public:
+	int minDamage;
+	int maxDamage;
+	int color;
+	char *damageType;
+	PlusDamageBuff(int minDamage, int maxDamage, char* damageType, int color) : Buff() {
+		sprintf_s(name, "%s damage (%d - %d)", damageType, minDamage, maxDamage);
+		this->minDamage = minDamage;
+		this->maxDamage = maxDamage;
+		this->damageType = damageType;
+		this->color = color;
+	}
+
+	void printStats(Creature* creature, int &x, int &y) {
+		attrset(COLOR_PAIR(color));
+		mvprintw(x++, y, "%s", name);
+	}
+
+	void start(Creature* creature);
+	void end(Creature* creature);
+	void tick(Creature* creature) {}
+
+	int goodness() { return 1; }
+
+	void attacked(Creature* attacker, Creature* defender, int damage);
 };
 
 class Skill {
@@ -132,7 +567,6 @@ public:
 	virtual void doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove) = 0;
 };
 
-
 class BerserkSkill : public Skill {
 public:
 	BerserkSkill(Creature* creature) : Skill(creature) {
@@ -145,7 +579,6 @@ public:
 	int shouldCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove);
 	void doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove);
 };
-
 
 class SingleTargetSkill : public Skill {
 public:
@@ -171,7 +604,6 @@ public:
 	}
 	void doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove);
 };
-
 
 class FireBallSkill : public SingleTargetSkill {
 public:
@@ -203,19 +635,19 @@ public:
 	void doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove);
 };
 
-
 class PoisonBladeSkill : public Skill {
 public:
-	PoisonBladeSkill(Creature* creature) : Skill(creature) {
+	int poisonDamage;
+	PoisonBladeSkill(Creature* creature, int poisonDamage = 4) : Skill(creature) {
 		strcpy_s(name, "Lighting");
 		manaCost = 0;
 		delayToNextCast = 200.0f;
 		globalSpellDelay = 2.0f;
+		this->poisonDamage;
 	}
 	int shouldCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove);
 	void doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove);
 };
-
 
 class HealSkill : public Skill {
 public:

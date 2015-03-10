@@ -11,26 +11,32 @@ extern bool tickGame;
 class Creature;
 extern vector<Creature*> creatures;
 
-class Weapon {
+class Equipment {
 public:
+	Equipment() {
+		buffGroup = NULL;
+	}
+	int slot;
 	int type;
+	char name[128];
+	BuffGroup* buffGroup;
+
+	void addBuff(Buff* buff) {
+		if (buffGroup == NULL) buffGroup = new BuffGroup();
+		buffGroup->buffs.push_back(buff);
+	}
+};
+
+class Weapon : public Equipment {
+public:
 	float swingTime;
 	int minDamage;
 	int maxDamage;
 	int range;
-	char name[32];
 
 	int getDamage() {
 		return minDamage + ran(maxDamage - minDamage + 1);
 	}
-};
-
-class Armor{
-public:
-	int type;
-	int DR;
-	float slowness;
-	char name[32];
 };
 
 class Creature {
@@ -58,9 +64,10 @@ public:
 	int mp;
 	int mpMax;
 	int hpMax;
-	
+
 	Weapon* weapon;
-	Armor* armor;
+	Weapon* punchs;
+	vector<vector<Equipment*>> eqipmentSlots;
 
 	int level;
 
@@ -89,7 +96,7 @@ public:
 	int fearless;
 
 	float timeToNextSkill;
-
+	int sightMult;
 	vector<Buff*> buffs;
 	vector<Skill*> skills;
 	vector<AttackListener*> attackListeners;
@@ -101,17 +108,17 @@ public:
 	vector<Creature*> enemies;
 
 	float getTickToRegen() {
-		return tickToRegen;
+		return tickToRegen * hpRegenMult / 1000;
 	}
 	float getTickToManaRegen() {
-		return tickToManaRegen;
+		return tickToManaRegen * mpRegenMult / 1000;
 	}
 
 	float getExp() {
 		return ranf(minExp, maxExp);
 	}
 	float getSight() {
-		return sight;
+		return sight * sightMult / 1000.0f;
 	}
 
 	int damageBoost;
@@ -119,6 +126,9 @@ public:
 
 	int attackSpeedMult;
 	int moveSpeedMult;
+	int mpRegenMult;
+	int hpRegenMult;
+	int chanceToHit;
 
 	int getWeaponDamage() {
 		return (weapon->getDamage()*damageMult) / 1000 + damageBoost;
@@ -141,6 +151,10 @@ public:
 		return ranf(20.0f, 60.0f);
 	}
 
+	bool evaded() {
+		return ran(1000) > chanceToHit;
+	}
+
 	Creature() {
 		index = nextCreatureIndex++;
 		lastAttackCreatureIndex = -1;
@@ -154,9 +168,36 @@ public:
 		pixel.color = ran(256);
 		pixel.character = '?';
 		minExp = maxExp = 0;
-		tickToManaRegen = 150.0f;
+		tickToRegen = 150.0f;
 		tickToManaRegen = 100.0f;
 		explores = wandersAround = false;
+
+		eqipmentSlots.resize(EQ_MAX);
+
+		eqipmentSlots[WEAPON].resize(1);
+		eqipmentSlots[ARMOR].resize(1);
+		eqipmentSlots[SHIELD].resize(1);
+		eqipmentSlots[HELM].resize(1);
+		eqipmentSlots[GLOVES].resize(1);
+		eqipmentSlots[BOOTS].resize(1);
+		eqipmentSlots[RING].resize(2);
+		eqipmentSlots[AMULET].resize(1);
+
+		punchs = new Weapon();
+		punchs->slot = WEAPON;
+		punchs->minDamage = 2 + level;
+		punchs->maxDamage = punchs->minDamage + 4 + level;
+		punchs->swingTime = 15.0f;
+		strcpy_s(punchs->name, "Punchs");
+		punchs->range = 1;
+
+		for (unsigned i = 0; i < eqipmentSlots.size(); i++) {
+			for (unsigned j = 0; j < eqipmentSlots[i].size(); j++) {
+				eqipmentSlots[i][j] = NULL;
+			}
+		}
+		reset(Pos(-1, -1));
+		equip(punchs);
 	}
 	~Creature() {
 		for (unsigned i = 0; i < skills.size(); i++) {
@@ -166,15 +207,32 @@ public:
 			buffs[i]->end(this);
 			delete buffs[i];
 		}
-		delete weapon;
+		for (unsigned i = 0; i < eqipmentSlots.size(); i++) {
+			for (unsigned j = 0; j < eqipmentSlots[i].size(); j++) {
+				if (eqipmentSlots[i][j] != NULL) {
+					if (eqipmentSlots[i][j]->buffGroup != NULL) {
+						eqipmentSlots[i][j]->buffGroup->end(this);
+						delete eqipmentSlots[i][j]->buffGroup;
+					}
+					delete eqipmentSlots[i][j];
+				}
+			}
+
+		}
+		if (weapon != punchs) {
+			delete punchs;
+		}
 	}
 
 	void reset(Pos pos) {
-		this->pos = pos;
-		maze.walls[pos.x][pos.y] = type;
-		memset(visibleCells, false, sizeof(visibleCells));
-		visible.clear();
-		updateVisibility();
+		if (pos.x >= 0) {
+			this->pos = pos;
+			maze.walls[pos.x][pos.y] = type;
+			memset(visibleCells, false, sizeof(visibleCells));
+			visible.clear();
+			updateVisibility();
+		}
+
 		lastTick = globalTick;
 		lastRegenTick = globalTick;
 		lastManaRegenTick = globalTick;
@@ -192,6 +250,14 @@ public:
 		damageMult = 1000;
 		attackSpeedMult = 1000;
 		moveSpeedMult = 1000;
+		sightMult = 1000;
+		chanceToHit = 1000;
+
+		mpRegenMult = 1000;
+		hpRegenMult = 1000;
+
+		punchs->minDamage = 2 + level;
+		punchs->maxDamage = punchs->minDamage + 4 + level;
 
 		DR = 0;
 	}
@@ -300,15 +366,15 @@ public:
 		checkShouldRunAway();
 
 		if (wantsToRun) {
-			if(tryToRun()){
+			if (tryToRun()) {
 				return true;
 			}
 		} else if (creaturesToAttack.size() > 0) {
-			if(tryToAttack()){
+			if (tryToAttack()) {
 				return true;
 			}
 		} else	if (creaturesToMove.size() > 0) {
-			if(tryToApproach()){
+			if (tryToApproach()) {
 				return true;
 			}
 		} else if (hp < hpMax / 3) {
@@ -319,12 +385,12 @@ public:
 			}
 			findTarget();
 		} else if (wandersAround && tickToNextWander < globalTick &&  globalTick - lastTick >= perMoveTick()) {
-			if(tryToWander()){
+			if (tryToWander()) {
 				return true;
 			}
 		}
 
-		if(tryToGoTarget()){
+		if (tryToGoTarget()) {
 			return true;
 		}
 
@@ -332,6 +398,9 @@ public:
 	}
 
 	void doDamage(int damage) {
+		if (hp <= 0) {
+			return;
+		}
 		damage -= DR;
 		if (damage < 1) damage = 1;
 		hp -= damage;
@@ -360,8 +429,7 @@ public:
 		return false;
 	}
 
-	void checkCreaturesAround()
-	{
+	void checkCreaturesAround() {
 		allies.clear();
 		enemies.clear();
 		creaturesToAttack.clear();
@@ -403,9 +471,7 @@ public:
 
 	}
 
-
-	void checkSkills()
-	{
+	void checkSkills() {
 		if (timeToNextSkill <= globalTick) {
 			int skillToCast = -1;
 			int minSkillVal = 100000;
@@ -427,8 +493,7 @@ public:
 
 	}
 
-	void tickBuffs()
-	{
+	void tickBuffs() {
 
 		for (unsigned i = 0; i < buffs.size(); i++) {
 			buffs[i]->tick(this);
@@ -446,8 +511,7 @@ public:
 		}
 	}
 
-	void checkShouldRunAway()
-	{
+	void checkShouldRunAway() {
 
 		if (!fearless && timeToRunAgain < globalTick && enemies.size() >= 4 && !wantsToRun && hp < hpMax / 2) {
 
@@ -505,8 +569,7 @@ public:
 
 	}
 
-	bool tryToRun()
-	{
+	bool tryToRun() {
 		if (pathVal < targetPath.size()) {
 			if (globalTick - lastTick >= perMoveTick()) {
 				if (moveToPos(targetPath[pathVal++])) {
@@ -515,16 +578,15 @@ public:
 				}
 			}
 		}
-		if (timeToFeelSafe <  globalTick) {
+		if (timeToFeelSafe < globalTick) {
 			wantsToRun = false;
 			timeToRunAgain = globalTick + 250;
 			return true;
-		}	
+		}
 		return false;
 	}
 
-	bool tryToAttack()
-	{
+	bool tryToAttack() {
 		if (globalTick - lastTick >= perAttackTick()) {
 			bool reattack = false;
 
@@ -544,16 +606,22 @@ public:
 			}
 			lastAttackCreatureIndex = creaturesToAttack[attackIndex]->index;
 
-			int damage = getWeaponDamage();
+			if (!creaturesToAttack[attackIndex]->evaded()) {
+				int damage = getWeaponDamage();
+				char buff[128];
+				sprintf_s(buff, "%s#%d attacks %s#%d with its %s for %d damage!", name, index, creaturesToAttack[attackIndex]->name, creaturesToAttack[attackIndex]->index, weapon->name, damage);
+				pushMessage(buff);
 
-			char buff[128];
-			sprintf_s(buff, "%s#%d attacks %s#%d with its %s for %d damage!", name, index, creaturesToAttack[attackIndex]->name, creaturesToAttack[attackIndex]->index, weapon->name, damage);
-			pushMessage(buff);
+				for (unsigned i = 0; i < attackListeners.size(); i++) {
+					attackListeners[i]->attacked(this, creaturesToAttack[attackIndex], damage);
+				}
+				creaturesToAttack[attackIndex]->doDamage(damage);
 
-			for (unsigned i = 0; i < attackListeners.size(); i++) {
-				attackListeners[i]->attacked(this, creaturesToAttack[attackIndex], damage);
+			} else {
+				char buff[128];
+				sprintf_s(buff, "%s#%d attacks %s#%d  but misses.", name, index, creaturesToAttack[attackIndex]->name, creaturesToAttack[attackIndex]->index);
+				pushMessage(buff);
 			}
-			creaturesToAttack[attackIndex]->doDamage(damage);
 
 			lastTick = globalTick;
 			return true;
@@ -561,8 +629,7 @@ public:
 		return false;
 	}
 
-	bool tryToApproach()
-	{
+	bool tryToApproach() {
 		if (wantsToRun) {
 			return false;
 		}
@@ -589,8 +656,7 @@ public:
 		return false;
 	}
 
-	bool tryToWander()
-	{
+	bool tryToWander() {
 		Pos p;
 		bool hasPos = false;
 		if (master) {
@@ -643,8 +709,7 @@ public:
 
 	}
 
-	bool tryToGoTarget()
-	{
+	bool tryToGoTarget() {
 		if (hasTarget && globalTick - lastTick >= perMoveTick()) {
 			pathVal++;
 			if (pathVal == targetPath.size()) {
@@ -658,8 +723,40 @@ public:
 		return false;
 	}
 
+	bool equip(Equipment* equipment) {
+		if (equipment == NULL) return false;
+		int slot = equipment->slot;
+		int emptyIndex = -1;
+		for (unsigned i = 0; i < eqipmentSlots[slot].size(); i++) {
+			if (eqipmentSlots[slot][i] == NULL) {
+				emptyIndex = i;
+				break;
+			}
+		}
 
+		if (emptyIndex == -1) {
+			emptyIndex = ran(eqipmentSlots[slot].size());
 
+			if (eqipmentSlots[slot][emptyIndex] != punchs) {
+				if (eqipmentSlots[slot][emptyIndex]->buffGroup) {
+					eqipmentSlots[slot][emptyIndex]->buffGroup->end(this);
+				}
+				delete eqipmentSlots[slot][emptyIndex];
+				eqipmentSlots[slot][emptyIndex] = NULL;
+			}
+		}
+
+		eqipmentSlots[slot][emptyIndex] = equipment;
+		if (equipment->buffGroup) {
+			equipment->buffGroup->start(this);
+		}
+
+		if (slot == WEAPON) {
+			weapon = (Weapon*)equipment;
+		}
+
+		return true;
+	}
 
 
 

@@ -3,6 +3,7 @@
 #include "CreatureGen.h"
 
 extern Maze maze;
+
 Creature* generateCreature(Pos pos, int level, int modif, int type = GOBLIN) {
 	if (!maze.isPosValid3(pos) || maze.walls[pos.x][pos.y] != 0) {
 		return NULL;
@@ -13,7 +14,7 @@ Creature* generateCreature(Pos pos, int level, int modif, int type = GOBLIN) {
 	}
 	Creature* c = NULL;
 	if (type == GOBLIN) {
-		c = generateGoblin(level + ran(4) / 3);
+		c = generateGoblin(level + ran(4) / 3, pos);
 		if (modif == MAGE || modif == PRIEST) {
 			c->hpMax += 10 + 5 * level;
 			c->mpMax += 40 + 20 * level;
@@ -53,12 +54,8 @@ Creature* generateCreature(Pos pos, int level, int modif, int type = GOBLIN) {
 			strcat_s(c->name, " Berserker");
 		}
 	}
-	if(c){
-		c->pos = pos;
-	}
 	return c;
 }
-
 
 bool generateCreatureGroup(Pos pos, vector<Creature*> &group, int level, int type = GOBLIN) {
 
@@ -84,11 +81,11 @@ bool generateCreatureGroup(Pos pos, vector<Creature*> &group, int level, int typ
 		Pos p = npos[i];
 
 		if (globalVisible[p.x][p.y] == 0 && maze.walls[p.x][p.y] == 0) {
-			
+
 			bool modified = ran(2 - level / 2) == 0;
 			int modif = -1;
 			if (modified) modif = ran(4);
-			Creature *c = generateCreature(p, level + modified?1:0, modif, type);
+			Creature *c = generateCreature(p, level + modified ? 1 : 0, modif, type);
 			if (c) {
 				if (modified && masterIndex == -1) masterIndex = c->index;
 				ret = true;
@@ -102,7 +99,6 @@ bool generateCreatureGroup(Pos pos, vector<Creature*> &group, int level, int typ
 	}
 	for (unsigned i = 0; i < group.size(); i++) {
 		group[i]->masterIndex = masterIndex;
-		group[i]->reset(group[i]->pos);
 	}
 	return ret;
 }

@@ -25,6 +25,12 @@ public:
 		if (buffGroup == NULL) buffGroup = new BuffGroup();
 		buffGroup->buffs.push_back(buff);
 	}
+
+	virtual int goodness(Creature* creature){
+		int g = 1;
+		if(buffGroup) g+=buffGroup->goodness(creature);
+		return g;
+	}
 };
 
 class Weapon : public Equipment {
@@ -36,6 +42,13 @@ public:
 
 	int getDamage() {
 		return minDamage + ran(maxDamage - minDamage + 1);
+	}
+
+
+	int goodness(Creature* creature) override{
+		int g = 1 + (int)(((minDamage + maxDamage)*10.0f)/swingTime) + range*3;
+		if(buffGroup) g+=buffGroup->goodness(creature);
+		return g;
 	}
 };
 
@@ -293,7 +306,7 @@ public:
 				if (visibleCells[p.x][p.y] == 0 && maze.walls[p.x][p.y] == 0) {
 					moveTarget = p;
 
-					findPath<MAZE_W, MAZE_H>(pos, moveTarget, maze.walls, addWeights, 10000000.0f, targetPath);
+					findPath<MAZE_W, MAZE_H>(pos, moveTarget, maze.walls, addWeights, 100000.0f, targetPath);
 
 					return;
 				}
@@ -306,7 +319,7 @@ public:
 					if (visibleCells[i][j] == 0 && maze.walls[i][j] == 0) {
 						moveTarget = Pos(i, j);
 
-						findPath<MAZE_W, MAZE_H>(pos, moveTarget, maze.walls, addWeights, 10000000.0f, targetPath);
+						findPath<MAZE_W, MAZE_H>(pos, moveTarget, maze.walls, addWeights, 100000.0f, targetPath);
 
 						return;
 					}
@@ -557,7 +570,7 @@ public:
 
 				bool foundPos = false;
 				for (unsigned i = 0; i < safePos.size() && !foundPos; i++) {
-					foundPos = findPath<MAZE_W, MAZE_H>(pos, moveTarget = safePos[i], maze.walls, moveWeights, 10000000.0f, targetPath);
+					foundPos = findPath<MAZE_W, MAZE_H>(pos, moveTarget = safePos[i], maze.walls, moveWeights, dist(pos, moveTarget)*2.0f, targetPath);
 				}
 				if (foundPos) {
 					pathVal = 0;
@@ -636,15 +649,23 @@ public:
 		if (globalTick - lastTick >= perMoveTick()) {
 			Pos p = getAveragePos(creaturesToMove);
 
-			bool found = p != pos && findPath<MAZE_W, MAZE_H>(pos, p, maze.walls, moveWeights, 10000000.0f, targetPath);
+			bool found = p != pos && findPath<MAZE_W, MAZE_H>(pos, p, maze.walls, moveWeights, dist(p, pos)*2.0f, targetPath);
 			if (found) {
 				moveToPos(targetPath[0]);
 				lastTick = globalTick;
 				return true;
 			} else {
+				int min = 100000;
+				int min_i = -1;
 				for (unsigned i = 0; i < creaturesToMove.size(); i++) {
-
-					found = findPath<MAZE_W, MAZE_H>(pos, creaturesToMove[i]->pos, maze.walls, moveWeights, 10000000.0f, targetPath);
+					int d = dist(pos, creaturesToMove[i]->pos);
+					if(min > d){
+						min = d;
+						min_i = i;
+					}
+				}
+				if(min_i != -1){
+					found = findPath<MAZE_W, MAZE_H>(pos, creaturesToMove[min_i]->pos, maze.walls, moveWeights, min*2.0f, targetPath);
 					if (found) {
 						moveToPos(targetPath[0]);
 						lastTick = globalTick;
@@ -665,7 +686,7 @@ public:
 			if (npos.size() > 0) {
 				p = npos[ran(npos.size())];
 
-				hasPos = findPath<MAZE_W, MAZE_H>(pos, p, maze.walls, moveWeights, 10000000.0f, npos);
+				hasPos = findPath<MAZE_W, MAZE_H>(pos, p, maze.walls, moveWeights, dist(pos, p)*2.0f, npos);
 				if (hasPos && npos.size() == 1) hasPos = false;
 
 				if (hasPos) {
@@ -680,7 +701,7 @@ public:
 			doExplore<MAZE_W, MAZE_H>(p, maze.walls, moveWeights, 3.0f, npos);
 			if (npos.size() > 0) {
 				p = npos[ran(npos.size())];
-				hasPos = findPath<MAZE_W, MAZE_H>(pos, p, maze.walls, moveWeights, 10000000.0f, npos);
+				hasPos = findPath<MAZE_W, MAZE_H>(pos, p, maze.walls, moveWeights, dist(pos, p)*2.0f, npos);
 				if (hasPos && npos.size() == 1) hasPos = false;
 				if (hasPos) {
 					p = npos[0];
@@ -694,7 +715,7 @@ public:
 			if (npos.size() > 0) {
 				hasPos = true;
 				p = npos[ran(npos.size())];
-				findPath<MAZE_W, MAZE_H>(pos, p, maze.walls, moveWeights, 10000000.0f, npos);
+				findPath<MAZE_W, MAZE_H>(pos, p, maze.walls, moveWeights, dist(pos, p)*2.0f, npos);
 				if (hasPos && npos.size() == 1) hasPos = false;
 				if (hasPos) p = npos[0];
 			}
@@ -712,7 +733,7 @@ public:
 	bool tryToGoTarget() {
 		if (hasTarget && globalTick - lastTick >= perMoveTick()) {
 			pathVal++;
-			if (pathVal == targetPath.size()) {
+			if (pathVal >= targetPath.size()) {
 				findTarget();
 				return true;
 			}

@@ -21,7 +21,7 @@ public:
 	virtual void end(Creature* creature) = 0;
 	virtual void tick(Creature* creature) = 0;
 	virtual void printStats(Creature* creature, int &x, int &y) = 0;
-	virtual int goodness() = 0;
+	virtual int goodness(Creature* creature) = 0;
 	virtual ~Buff() {}
 };
 
@@ -35,7 +35,7 @@ public:
 	}
 
 	void printStats(Creature* creature, int &x, int &y) {
-		int good = goodness();
+		int good = goodness(creature);
 		attrset(COLOR_PAIR(getColorIndex(good <= 0 ? 7 : 0, good >= 0 ? 7 : 0, 0)));
 
 		int ypush = 0;
@@ -51,8 +51,8 @@ public:
 	void end(Creature* creature);
 	void tick(Creature* creature) {}
 
-	int goodness() {
-		return buff;
+	int goodness(Creature* creature) {
+		return buff*10;
 	}
 };
 
@@ -66,7 +66,7 @@ public:
 	}
 
 	void printStats(Creature* creature, int &x, int &y) {
-		int good = goodness();
+		int good = goodness(creature);
 		attrset(COLOR_PAIR(getColorIndex(good <= 0 ? 7 : 0, good >= 0 ? 7 : 0, 0)));
 
 		int ypush = 0;
@@ -82,8 +82,8 @@ public:
 	void end(Creature* creature);
 	void tick(Creature* creature) {}
 
-	int goodness() {
-		return buff;
+	int goodness(Creature* creature) {
+		return buff*3;
 	}
 };
 class MpBuff : public Buff {
@@ -96,7 +96,7 @@ public:
 	}
 
 	void printStats(Creature* creature, int &x, int &y) {
-		int good = goodness();
+		int good = goodness(creature);
 		attrset(COLOR_PAIR(getColorIndex(good <= 0 ? 7 : 0, good >= 0 ? 7 : 0, 0)));
 
 		int ypush = 0;
@@ -112,8 +112,8 @@ public:
 	void end(Creature* creature);
 	void tick(Creature* creature) {}
 
-	int goodness() {
-		return buff;
+	int goodness(Creature* creature) {
+		return buff*2;
 	}
 };
 class ConstantDMGBoost : public Buff {
@@ -126,7 +126,7 @@ public:
 	}
 
 	void printStats(Creature* creature, int &x, int &y) {
-		int good = goodness();
+		int good = goodness(creature);
 		attrset(COLOR_PAIR(getColorIndex(good <= 0 ? 7 : 0, good >= 0 ? 7 : 0, 0)));
 
 		int ypush = 0;
@@ -142,8 +142,8 @@ public:
 	void end(Creature* creature);
 	void tick(Creature* creature) {}
 
-	int goodness() {
-		return buff;
+	int goodness(Creature* creature) {
+		return buff * 2;
 	}
 };
 
@@ -159,7 +159,7 @@ public:
 	}
 
 	void printStats(Creature* creature, int &x, int &y) {
-		int g = goodness();
+		int g = goodness(creature);
 
 		attrset(COLOR_PAIR(getColorIndex(g <= 0 ? 7 : 0, g >= 0 ? 7 : 0, 0)));
 
@@ -176,8 +176,8 @@ public:
 	void end(Creature* creature);
 	void tick(Creature* creature) {}
 
-	int goodness() {
-		return buff - 100;
+	int goodness(Creature* creature) {
+		return (int)((buff - 100)*1.5f);
 	}
 };
 
@@ -193,7 +193,7 @@ public:
 	}
 
 	void printStats(Creature* creature, int &x, int &y) {
-		int g = goodness();
+		int g = goodness(creature);
 
 		attrset(COLOR_PAIR(getColorIndex(g <= 0 ? 7 : 0, g >= 0 ? 7 : 0, 0)));
 
@@ -210,8 +210,8 @@ public:
 	void end(Creature* creature);
 	void tick(Creature* creature) {}
 
-	int goodness() {
-		return 100 - buff;
+	int goodness(Creature* creature) {
+		return (100 - buff);
 	}
 };
 
@@ -227,7 +227,7 @@ public:
 	}
 
 	void printStats(Creature* creature, int &x, int &y) {
-		int g = goodness();
+		int g = goodness(creature);
 
 		attrset(COLOR_PAIR(getColorIndex(g <= 0 ? 7 : 0, g >= 0 ? 7 : 0, 0)));
 
@@ -244,8 +244,8 @@ public:
 	void end(Creature* creature);
 	void tick(Creature* creature) {}
 
-	int goodness() {
-		return 100 - buff;
+	int goodness(Creature* creature) {
+		return (100 - buff);
 	}
 };
 
@@ -261,7 +261,7 @@ public:
 	}
 
 	void printStats(Creature* creature, int &x, int &y) {
-		int g = goodness();
+		int g = goodness(creature);
 
 		attrset(COLOR_PAIR(getColorIndex(g <= 0 ? 7 : 0, g >= 0 ? 7 : 0, 0)));
 
@@ -278,8 +278,11 @@ public:
 	void end(Creature* creature);
 	void tick(Creature* creature) {}
 
-	int goodness() {
-		return buff - 100;
+	int goodness(Creature* creature) {
+		if(buff == 100) return 0;
+		int val = abs(buff - 100)/5 + 1;
+
+		return buff>100?+val:-val;
 	}
 };
 
@@ -296,7 +299,7 @@ public:
 	}
 
 	void printStats(Creature* creature, int &x, int &y) {
-		int g = goodness();
+		int g = goodness(creature);
 
 		attrset(COLOR_PAIR(getColorIndex(g <= 0 ? 7 : 0, g >= 0 ? 7 : 0, 0)));
 
@@ -313,8 +316,8 @@ public:
 	void end(Creature* creature);
 	void tick(Creature* creature) {}
 
-	int goodness() {
-		return  buff - 100;
+	int goodness(Creature* creature) {
+		return (int)((buff - 100)*1.2f);
 	}
 };
 
@@ -331,7 +334,7 @@ public:
 	}
 
 	void printStats(Creature* creature, int &x, int &y) {
-		int g = goodness();
+		int g = goodness(creature);
 
 		attrset(COLOR_PAIR(getColorIndex(g <= 0 ? 7 : 0, g >= 0 ? 7 : 0, 0)));
 
@@ -348,7 +351,7 @@ public:
 	void end(Creature* creature);
 	void tick(Creature* creature) {}
 
-	int goodness() {
+	int goodness(Creature* creature) {
 		return buff - 100;
 	}
 };
@@ -365,7 +368,7 @@ public:
 	}
 
 	void printStats(Creature* creature, int &x, int &y) {
-		int g = goodness();
+		int g = goodness(creature);
 
 		attrset(COLOR_PAIR(getColorIndex(g <= 0 ? 7 : 0, g >= 0 ? 7 : 0, 0)));
 
@@ -382,7 +385,7 @@ public:
 	void end(Creature* creature);
 	void tick(Creature* creature) {}
 
-	int goodness() {
+	int goodness(Creature* creature) {
 		return buff - 100;
 	}
 };
@@ -402,7 +405,7 @@ public:
 	void printStats(Creature* creature, int &x, int &y) {
 		int shift = 0;
 		if (name[0]) {
-			int g = goodness();
+			int g = goodness(creature);
 			attrset(COLOR_PAIR(getColorIndex(g <= 0 ? 7 : 0, g >= 0 ? 7 : 0, 0)));
 			mvprintw(x++, y, "%s", name);
 			shift = 1;
@@ -434,12 +437,11 @@ public:
 		}
 	}
 
-	int goodness() {
+	int goodness(Creature* creature) {
 		int g = 0;
 		for (unsigned i = 0; i < buffs.size(); i++) {
-			int t = buffs[i]->goodness();
-			g += t > 0;
-			g -= t < 0;
+			int t = buffs[i]->goodness(creature);
+			g += t;
 		}
 		return g;
 	}
@@ -465,7 +467,9 @@ public:
 	void end(Creature* creature);
 	void tick(Creature* creature) {}
 
-	int goodness() { return 1; }
+	int goodness(Creature* creature){
+		return BuffGroup::goodness(creature) - 5;
+	}
 };
 
 class SlowBuff : public BuffGroup {
@@ -492,14 +496,14 @@ public:
 	}
 
 	void printStats(Creature* creature, int &x, int &y) {
-		attrset(COLOR_PAIR(getColorIndex(goodness() > 0 ? 0 : 7, goodness() < 0 ? 7 : 0, 0)));
+		attrset(COLOR_PAIR(getColorIndex(goodness(creature) > 0 ? 0 : 7, goodness(creature) < 0 ? 7 : 0, 0)));
 		mvprintw(x++, y, "%s", name);
 	}
 	void start(Creature* creature);
 	void end(Creature* creature);
 	void tick(Creature* creature);
 
-	int goodness() { return -dotDamage; }
+	int goodness(Creature* creature) { return -dotDamage; }
 };
 
 class PoisonBladeBuff : public Buff, public AttackListener {
@@ -521,7 +525,7 @@ public:
 	void end(Creature* creature);
 	void tick(Creature* creature) {}
 
-	int goodness() { return 1; }
+	int goodness(Creature* creature) { return poisonDamage*2; }
 
 	void PoisonBladeBuff::attacked(Creature* attacker, Creature* defender, int damage);
 };
@@ -549,7 +553,7 @@ public:
 	void end(Creature* creature);
 	void tick(Creature* creature) {}
 
-	int goodness() { return 1; }
+	int goodness(Creature* creature) { return (minDamage+maxDamage)/3+1; }
 
 	void attacked(Creature* attacker, Creature* defender, int damage);
 };

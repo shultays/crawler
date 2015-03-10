@@ -8,6 +8,7 @@
 #include"MazeActions.h"
 #include<time.h>
 
+unsigned seed;
 
 float globalTick = 0;
 float realTick = 0;
@@ -23,11 +24,16 @@ int messagePos;
 char messages[MAX_MESSAGE][128];
 
 vector<Creature*> creatures;
+vector<Equipment*> droppedEqipments;
 Pos cursor;
 GameWindow<MAZE_W, MAZE_H> mazeWindow;
 int globalVisible[MAZE_W][MAZE_H];
 
 void resetGame() {
+	seed = (unsigned)time(0);
+	srand(seed);
+	printw("%u ran\n", seed);
+
 	memset(globalVisible, 0, sizeof(globalVisible));
 	globalTick = 0;
 	realTick = 0;
@@ -37,35 +43,45 @@ void resetGame() {
 	for (int i = 0; i < MAX_MESSAGE; i++) {
 		messages[i][0] = '\0';
 	}
+
+	for(unsigned i=0; i<droppedEqipments.size(); i++){
+		delete droppedEqipments[i];
+	}
+	droppedEqipments.clear();
+
+	for(unsigned i=0; i<creatures.size(); i++){
+		delete creatures[i];
+	}
 	creatures.clear();
-	creatures.push_back(new Creature());
-	creatures[0]->explores = true;
-	creatures[0]->wandersAround = false;
-	creatures[0]->type = ADVENTURER;
-	creatures[0]->pixel.character = '@';
-	creatures[0]->pixel.color = getColorIndex(7, 0, 0);
-	creatures[0]->movePerTick = 5.0f;
-	creatures[0]->sight = 5.0f;
-	creatures[0]->hpMax = creatures[0]->hp = 300;
-	creatures[0]->mpMax = creatures[0]->mp = 100;
-	creatures[0]->level = 1;
-	strcpy_s(creatures[0]->name, "Adventurer");
-	creatures[0]->tickToRegen = 120.0f;
+	Creature* adventurer = new Creature();
+	adventurer->explores = true;
+	adventurer->wandersAround = false;
+	adventurer->type = ADVENTURER;
+	adventurer->pixel.character = '@';
+	adventurer->pixel.color = getColorIndex(7, 0, 0);
+	adventurer->movePerTick = 5.0f;
+	adventurer->sight = 5.0f;
+	adventurer->hpMax = adventurer->hp = 300;
+	adventurer->mpMax = adventurer->mp = 100;
+	adventurer->level = 1;
+	strcpy_s(adventurer->name, "Adventurer");
+	adventurer->tickToRegen = 120.0f;
 
-	creatures[0]->reset(Pos(maze.roomPos[0].x, maze.roomPos[0].y));
+	adventurer->reset(Pos(maze.roomPos[0].x, maze.roomPos[0].y));
 
-	creatures[0]->equip(getWeapon(5));
-	creatures[0]->equip(getArmor(4));
-	creatures[0]->equip(getHelm(3));
-	creatures[0]->equip(getShield(3));
-	creatures[0]->equip(getBoots(3));
-	creatures[0]->equip(getGloves(3));
-	creatures[0]->equip(getRing(3));
-	creatures[0]->equip(getRing(3));
-	creatures[0]->equip(getAmulet(3));
+	adventurer->equip(getWeapon(5));
+	adventurer->equip(getArmor(4));
+	adventurer->equip(getHelm(3));
+	adventurer->equip(getShield(3));
+	adventurer->equip(getBoots(3));
+	adventurer->equip(getGloves(3));
+	adventurer->equip(getRing(3));
+	adventurer->equip(getRing(3));
+	adventurer->equip(getAmulet(3));
 
-	creatures[0]->skills.push_back(new BerserkSkill(creatures[0]));
+	adventurer->skills.push_back(new BerserkSkill(adventurer));
 
+	creatures.push_back(adventurer);
 	pushMessage("Wild Adventurer appeared!");
 
 	for (int i = 0; i < 6; i++) {
@@ -81,10 +97,8 @@ void resetGame() {
 		}
 	}
 
-	cursor = creatures[0]->pos;
+	cursor = adventurer->pos;
 	tickGame = false;
-
-	srand((unsigned)time(0));
 }
 
 
@@ -158,7 +172,7 @@ void gameRefresh() {
 	erase();
 	attrset(COLOR_PAIR(255));
 	mvprintw(0, 2, "Tick : %d", (int)(globalTick));
-
+	
 	int row, col;
 	getmaxyx(stdscr, row, col);
 	mazeWindow.windowSize.x = row - 15;
@@ -248,7 +262,7 @@ void gameRefresh() {
 		x++;
 
 		if (creatureToShow->weapon->type != 0) {
-			mvprintw(x++, y, "WPN : %s", creatureToShow->weapon->name);
+			mvprintw(x++, y, "(%d) %s", creatureToShow->weapon->goodness(creatureToShow), creatureToShow->weapon->name);
 			mvprintw(x++, y, "DMG : %d - %d", creatureToShow->weapon->minDamage, creatureToShow->weapon->maxDamage);
 			mvprintw(x++, y, "ATK SPD : %d", (int)creatureToShow->weapon->swingTime);
 			mvprintw(x++, y, "RNG : %d", creatureToShow->weapon->range);
@@ -262,7 +276,7 @@ void gameRefresh() {
 			for (unsigned j = 0; j < creatureToShow->eqipmentSlots[i].size(); j++) {
 				if (creatureToShow->eqipmentSlots[i][j] != NULL) {
 					attrset(COLOR_PAIR(getColorIndex(4, 4, 4)));
-					mvprintw(x++, y, "%s : %s", eqipmentNames[i], creatureToShow->eqipmentSlots[i][j]->name);
+					mvprintw(x++, y, "(%d) %s", creatureToShow->eqipmentSlots[i][j]->goodness(creatureToShow), creatureToShow->eqipmentSlots[i][j]->name);
 					if (creatureToShow->eqipmentSlots[i][j]->buffGroup) {
 						creatureToShow->eqipmentSlots[i][j]->buffGroup->printStats(creatureToShow, x, y);
 					}
@@ -270,21 +284,9 @@ void gameRefresh() {
 				}
 			}
 		}
-		/*
-		if (creatureToShow->armor->type != 0) {
-
-		mvprintw(x++, y, "ARM : %s", creatureToShow->armor->name);
-		mvprintw(x++, y, "DR : %d", creatureToShow->armor->DR);
-		attrset(COLOR_PAIR(getColorIndex(7, 0, 0)));
-		int slow = (int)(100 * creatureToShow->armor->slowness) - 100;
-		if (slow != 0) {
-		mvprintw(x++, y, "SLW : +%%%d", (int)(100 * creatureToShow->armor->slowness) - 100);
-		}
-		attrset(COLOR_PAIR(getColorIndex(4, 4, 4)));
-		x++;
-		}*/
 
 		x++;
+
 		for (unsigned i = 0; i < creatureToShow->buffs.size(); i++) {
 			creatureToShow->buffs[i]->printStats(creatureToShow, x, y);
 		}
@@ -346,7 +348,6 @@ bool tick() {
 int WINAPI  WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 	LPSTR lpszCmdLine, int nCmdShow) {
 
-	srand(31);
 	ShowWindow(GetActiveWindow(), SW_SHOW);
 	win = initscr();
 	start_color();
@@ -395,13 +396,13 @@ int WINAPI  WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 		if (tickGame) {
 			hasChange |= tick();
 		}
-		gameRefresh();
 		if (hasChange || !tickGame) {
+			gameRefresh();
 			realTick += 20.0f;
 			time -= mtime();
 			int wait = 10 - time;
 			if (wait > 0) {
-				msleep(wait);
+				//msleep(wait);
 			}
 		}
 	}

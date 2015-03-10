@@ -8,7 +8,7 @@ unordered_map<int, float> seeWeights;
 
 char buffNamers[BUFF_CNT][32];
 char firstBuffNamers[BUFF_CNT][32];
-
+int eqipmentIcons[EQ_MAX];
 char eqipmentNames[EQ_MAX][32];
 
 int ran(int n) {
@@ -51,7 +51,14 @@ void initTools() {
 	moveWeights[ADVENTURER] = -1.0f;
 	moveWeights[ADVENTURER_ALLY] = -1.0f;
 	moveWeights[GOBLIN] = -1.0f;
-
+	eqipmentIcons[WEAPON] = ACS_DARROW;
+	eqipmentIcons[ARMOR] = ACS_DIAMOND;
+	eqipmentIcons[SHIELD] = 248;
+	eqipmentIcons[HELM] = ACS_PI;
+	eqipmentIcons[GLOVES] = 171;
+	eqipmentIcons[BOOTS] = ACS_LLCORNER;
+	eqipmentIcons[RING] = 240;
+	eqipmentIcons[AMULET] = 164;
 
 	strcpy_s(eqipmentNames[WEAPON], "WPN");
 	strcpy_s(eqipmentNames[ARMOR], "ARMR");
@@ -161,7 +168,6 @@ Pos getPosForDir(Pos i, int dir) {
 			i.y++;
 			break;
 
-
 		case UP_LEFT:
 			i.x--;
 			i.y--;
@@ -186,7 +192,6 @@ int getColorIndex(int r, int g, int b) {
 	return (b >> 1) | (g << 2) | (r << 5);
 }
 
-
 void pushMessage(char *str) {
 	messagePos++;
 	if (messagePos >= MAX_MESSAGE) {
@@ -194,8 +199,6 @@ void pushMessage(char *str) {
 	}
 	strcpy_s(messages[messagePos], str);
 }
-
-
 
 void msleep(int sleepMS) {
 #ifdef LINUX

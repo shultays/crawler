@@ -110,6 +110,7 @@ public:
 #define EQ_MAX 8
 
 extern char eqipmentNames[EQ_MAX][32];
+extern int eqipmentIcons[EQ_MAX];
 
 extern int messagePos;
 extern char messages[MAX_MESSAGE][128];
@@ -245,14 +246,11 @@ Pos getPosForDir(Pos i, int dir);
 
 int getColorIndex(int r, int g, int b);
 
-
 void pushMessage(char *str);
-
 
 void msleep(int sleepMS);
 
 unsigned mtime();
-
 
 enum {
 	NO_BUFF = 0,

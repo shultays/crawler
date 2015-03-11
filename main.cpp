@@ -16,7 +16,9 @@ WINDOW * win;
 
 Maze maze;
 bool tickGame;
+bool gotoNextLevel = false;
 
+int currentLevel = 1;
 
 int nextCreatureIndex = 0;
 
@@ -24,19 +26,21 @@ int messagePos;
 char messages[MAX_MESSAGE][128];
 
 vector<Creature*> creatures;
-vector<Equipment*> droppedEqipments;
+vector<DroppedEquipment> droppedEquipments;
+
 Pos cursor;
 GameWindow<MAZE_W, MAZE_H> mazeWindow;
 int globalVisible[MAZE_W][MAZE_H];
 
-void resetGame() {
+void resetGame(bool keepAdventurer = false) {
+	if (!keepAdventurer) {
+		globalTick = realTick = 0.0f;
+		currentLevel = 1;
+	}
 	seed = (unsigned)time(0);
-	srand(seed);
 	printw("%u ran\n", seed);
-
+	srand(seed);
 	memset(globalVisible, 0, sizeof(globalVisible));
-	globalTick = 0;
-	realTick = 0;
 
 	maze.genRand(3);
 	messagePos = 0;
@@ -44,64 +48,87 @@ void resetGame() {
 		messages[i][0] = '\0';
 	}
 
-	for(unsigned i=0; i<droppedEqipments.size(); i++){
-		delete droppedEqipments[i];
+	for (unsigned i = 0; i < droppedEquipments.size(); i++) {
+		delete droppedEquipments[i].e;
 	}
-	droppedEqipments.clear();
+	droppedEquipments.clear();
 
-	for(unsigned i=0; i<creatures.size(); i++){
+	for (unsigned i = keepAdventurer ? 1 : 0; i < creatures.size(); i++) {
 		delete creatures[i];
 	}
-	creatures.clear();
-	Creature* adventurer = new Creature();
-	adventurer->explores = true;
-	adventurer->wandersAround = false;
-	adventurer->type = ADVENTURER;
-	adventurer->pixel.character = '@';
-	adventurer->pixel.color = getColorIndex(7, 0, 0);
-	adventurer->movePerTick = 5.0f;
-	adventurer->sight = 5.0f;
-	adventurer->hpMax = adventurer->hp = 300;
-	adventurer->mpMax = adventurer->mp = 100;
-	adventurer->level = 1;
-	strcpy_s(adventurer->name, "Adventurer");
-	adventurer->tickToRegen = 120.0f;
+	nextCreatureIndex = 0;
+	if (keepAdventurer) {
+		creatures.resize(1);
+	} else {
+		creatures.clear();
+		Creature* adventurer = new Creature();
+		adventurer->explores = true;
+		adventurer->wandersAround = false;
+		adventurer->type = ADVENTURER;
+		adventurer->pixel.character = '@';
+		adventurer->pixel.color = getColorIndex(7, 0, 0);
+		adventurer->movePerTick = 5.0f;
+		adventurer->sight = 5.0f;
+		adventurer->hpMax = adventurer->hp = 300;
+		adventurer->mpMax = adventurer->mp = 100;
+		adventurer->level = 1;
+		adventurer->DR = 1;
+		adventurer->loots = true;
+		adventurer->consumes = true;
+		strcpy_s(adventurer->name, "Adventurer");
+		adventurer->tickToRegen = 100.0f;
 
-	adventurer->reset(Pos(maze.roomPos[0].x, maze.roomPos[0].y));
+		adventurer->reset(Pos(-1, -1));
 
-	adventurer->equip(getWeapon(5));
-	adventurer->equip(getArmor(4));
-	adventurer->equip(getHelm(3));
-	adventurer->equip(getShield(3));
-	adventurer->equip(getBoots(3));
-	adventurer->equip(getGloves(3));
-	adventurer->equip(getRing(3));
-	adventurer->equip(getRing(3));
-	adventurer->equip(getAmulet(3));
+		adventurer->equip(getWeapon(5));
+		adventurer->equip(getArmor(4, true));
+		adventurer->equip(getHelm(2));
+		adventurer->equip(getShield(1));
+		adventurer->equip(getBoots(1));
+		adventurer->equip(getGloves(1));
+		adventurer->equip(getRing(1));
+		adventurer->equip(getRing(1));
+		adventurer->equip(getAmulet(1));
 
-	adventurer->skills.push_back(new BerserkSkill(adventurer));
+		adventurer->equip(getConsumable(1, HEAL_POT));
+		adventurer->equip(getConsumable(1, HEAL_POT));
+		adventurer->equip(getConsumable(1, HEAL_POT));
+		adventurer->equip(getConsumable(1, REGEN_POT));
+		adventurer->equip(getConsumable(1, MANA_POT));
+		adventurer->equip(getConsumable(1, MANA_POT));
+		adventurer->equip(getConsumable(1, CHARM_SCROLL));
+		adventurer->equip(getConsumable(1, BUTTERFLY_SCROLL));
+		adventurer->equip(getConsumable(1, LIGHTING_SCROLL + ran(2)));
+		adventurer->skills.push_back(new BerserkSkill());
+		creatures.push_back(adventurer);
+	}
 
-	creatures.push_back(adventurer);
+
+	creatures[0]->resetPos(maze.upstairs);
+
+
 	pushMessage("Wild Adventurer appeared!");
 
-	for (int i = 0; i < 6; i++) {
+	for (int i = 0; i < 8; i++) {
+		int t = 10;
 		while (true) {
 			Pos p = maze.emptyPos[ran(maze.emptyPos.size())];
 			vector<Creature*> group;
-			if (generateCreatureGroup(p, group, 1, GOBLIN)) {
+			if (generateCreatureGroup(p, group, currentLevel, GOBLIN)) {
 				for (unsigned i = 0; i < group.size(); i++) {
+					group[i]->reset(group[i]->pos);
 					creatures.push_back(group[i]);
 				}
 				break;
 			}
+			t--;
+			if (t <= 0) break;
 		}
 	}
 
-	cursor = adventurer->pos;
+	cursor = creatures[0]->pos;
 	tickGame = false;
 }
-
-
 
 bool control(int i) {
 	bool hasChange = false;
@@ -117,6 +144,10 @@ bool control(int i) {
 
 		case ' ':
 			tickGame = !tickGame;
+
+			if (creatures.size() == 0 || creatures[0]->type != ADVENTURER) {
+				resetGame();
+			}
 			cursor = creatures[0]->pos;
 			hasChange = true;
 			break;
@@ -125,6 +156,7 @@ bool control(int i) {
 			if (!tickGame) {
 				Creature* c;
 				if (c = generateCreature(cursor, 1, ran(4))) {
+					c->reset(c->pos);
 					creatures.push_back(c);
 				}
 			}
@@ -132,12 +164,16 @@ bool control(int i) {
 		case '2':
 			if (!tickGame) {
 				vector<Creature*> group;
-				if (generateCreatureGroup(cursor, group, 1, GOBLIN)) {
+				if (generateCreatureGroup(cursor, group, currentLevel, GOBLIN)) {
 					for (unsigned i = 0; i < group.size(); i++) {
+						group[i]->reset(group[i]->pos);
 						creatures.push_back(group[i]);
 					}
 				}
 			}
+			break;
+		case '3':
+			gotoNextLevel = true;
 			break;
 		case KEY_UP:
 			newP = getPosForDir(cursor, UP);
@@ -167,12 +203,12 @@ bool control(int i) {
 	return hasChange;
 }
 
-
 void gameRefresh() {
 	erase();
 	attrset(COLOR_PAIR(255));
 	mvprintw(0, 2, "Tick : %d", (int)(globalTick));
-	
+
+	mvprintw(0, 20, "Level : %d", currentLevel);
 	int row, col;
 	getmaxyx(stdscr, row, col);
 	mazeWindow.windowSize.x = row - 15;
@@ -187,11 +223,11 @@ void gameRefresh() {
 			}
 			mazeWindow.data[i][j].color = getColorIndex(7, 7, 7);
 
-			if (creatures[0]->visibleCells[i][j] == 1) {
+			if (creatures[0]->mazeState[i][j] & IS_VISIBLE) {
 				mazeWindow.data[i][j].color = getColorIndex(7, 7, 7);
 			} else {
 
-				if (creatures[0]->visibleCells[i][j] == 2) {
+				if (creatures[0]->mazeState[i][j] & IS_VISIBLE_BEFORE) {
 					mazeWindow.data[i][j].color = getColorIndex(4, 4, 4);
 				} else {
 					mazeWindow.data[i][j].color = getColorIndex(2, 2, 2);
@@ -204,9 +240,8 @@ void gameRefresh() {
 	}
 
 	mazeWindow.data[creatures[0]->pos.x][creatures[0]->pos.y] = creatures[0]->pixel;
-	mazeWindow.data[creatures[0]->moveTarget.x][creatures[0]->moveTarget.y].character = 'X';
-	mazeWindow.data[creatures[0]->moveTarget.x][creatures[0]->moveTarget.y].color = getColorIndex(7, 0, 0);
-
+	//mazeWindow.data[creatures[0]->moveTarget.x][creatures[0]->moveTarget.y].character = 'X';
+	//mazeWindow.data[creatures[0]->moveTarget.x][creatures[0]->moveTarget.y].color = getColorIndex(7, 0, 0);
 
 	for (unsigned i = 0; i < creatures.size(); i++) {
 		mazeWindow.data[creatures[i]->pos.x][creatures[i]->pos.y] = creatures[i]->pixel;
@@ -221,8 +256,26 @@ void gameRefresh() {
 				creatureToShow = creatures[i];
 			}
 		}
-
 	}
+
+	for (unsigned i = 0; i < droppedEquipments.size(); i++) {
+		mazeWindow.data[droppedEquipments[i].p.x][droppedEquipments[i].p.y].character = eqipmentIcons[droppedEquipments[i].e->slot];
+		int t = droppedEquipments[i].e->goodness(creatures[0]);
+		if (t < 0) {
+			mazeWindow.data[droppedEquipments[i].p.x][droppedEquipments[i].p.y].color = getColorIndex(7, 0, 0);
+		} else {
+			t = 2 + ((t - 10) / 10);
+			if (t<2) t = 2;
+			if (t>6) t = 6;
+			mazeWindow.data[droppedEquipments[i].p.x][droppedEquipments[i].p.y].color = getColorIndex(t, t, t);
+		}
+	}
+
+	if (currentLevel != 1) {
+		mazeWindow.data[maze.upstairs.x][maze.upstairs.y].character = '<';
+	}
+	mazeWindow.data[maze.downstairs.x][maze.downstairs.y].character = '>';
+
 	if (creatureToShow) {
 		int x = mazeWindow.windowPos.x;
 		int y = mazeWindow.windowPos.y + mazeWindow.windowSize.y + 2;
@@ -252,6 +305,7 @@ void gameRefresh() {
 		if (creatureToShow->mpRegenMult != 1000) {
 			mvprintw(x++, y, "%MP RGN : %%%d", (int)creatureToShow->mpRegenMult / 10);
 		}
+		mvprintw(x++, y, "DR : %d", creatureToShow->DR);
 		mvprintw(x++, y, "SGHT : %d", (int)creatureToShow->getSight());
 		mvprintw(x++, y, "MV SPD : %d", (int)creatureToShow->perMoveTick());
 		mvprintw(x++, y, "ATK SPD : %d", (int)creatureToShow->perAttackTick());
@@ -272,15 +326,23 @@ void gameRefresh() {
 			x++;
 		}
 
-		for (unsigned i = 1; i < creatureToShow->eqipmentSlots.size(); i++) {
-			for (unsigned j = 0; j < creatureToShow->eqipmentSlots[i].size(); j++) {
-				if (creatureToShow->eqipmentSlots[i][j] != NULL) {
+		for (unsigned i = 1; i < creatureToShow->equipmentSlots.size(); i++) {
+			for (unsigned j = 0; j < creatureToShow->equipmentSlots[i].size(); j++) {
+				if (creatureToShow->equipmentSlots[i][j] != NULL) {
 					attrset(COLOR_PAIR(getColorIndex(4, 4, 4)));
-					mvprintw(x++, y, "(%d) %s", creatureToShow->eqipmentSlots[i][j]->goodness(creatureToShow), creatureToShow->eqipmentSlots[i][j]->name);
-					if (creatureToShow->eqipmentSlots[i][j]->buffGroup) {
-						creatureToShow->eqipmentSlots[i][j]->buffGroup->printStats(creatureToShow, x, y);
+					int count = 0;
+					if (i == CONSUMABLE) {
+						count = ((Consumable*)creatureToShow->equipmentSlots[i][j])->count;
 					}
-					x++;
+					if (count <= 1) {
+						mvprintw(x++, y, "(%d) %s", creatureToShow->equipmentSlots[i][j]->goodness(creatureToShow), creatureToShow->equipmentSlots[i][j]->name);
+					} else {
+						mvprintw(x++, y, "(%d) %s x%d", creatureToShow->equipmentSlots[i][j]->goodness(creatureToShow), creatureToShow->equipmentSlots[i][j]->name, count);
+					}
+					if (creatureToShow->equipmentSlots[i][j]->buffGroup) {
+						creatureToShow->equipmentSlots[i][j]->buffGroup->printStats(creatureToShow, x, y);
+					}
+					if (i != CONSUMABLE) x++;
 				}
 			}
 		}
@@ -309,7 +371,27 @@ void gameRefresh() {
 		}
 	}
 
+
+
+
 	mazeWindow.render();
+
+
+	if (creatures.size() == 0 || creatures[0]->type != ADVENTURER) {
+		char *text = "The Adventurer is dead!";
+		int l = strlen(text);
+		int x = mazeWindow.windowPos.x + mazeWindow.windowSize.x / 2;
+		int y = mazeWindow.windowPos.y + mazeWindow.windowSize.y / 2 - l / 2;
+		for (int i = x - 1; i <= x + 1; i++) {
+			for (int j = y - 1; j < y + l + 1; j++) {
+				mvaddch(i, j, ' ');
+			}
+		}
+
+		attrset(COLOR_PAIR(getColorIndex(7, 7, 7)));
+		mvprintw(x, y, text);
+	}
+
 	attrset(COLOR_PAIR(255));
 
 	int j = messagePos;
@@ -388,7 +470,13 @@ int WINAPI  WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 	while (true) {
 		int i;
 		unsigned time = mtime();
-		int t = maze.walls[44][11];
+
+		if (gotoNextLevel) {
+			gotoNextLevel = false;
+			currentLevel++;
+			resetGame(true);
+		}
+
 		bool hasChange = false;
 		while ((i = getch()) != ERR) {
 			hasChange |= control(i);

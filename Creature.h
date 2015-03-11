@@ -3,17 +3,28 @@
 #include "Tools.h"
 #include "Maze.h"
 #include "Skill.h"
+#include "CreatureGen.h"
 
 extern int nextCreatureIndex;
 extern Maze maze;
 extern float globalTick;
 extern bool tickGame;
+extern bool gotoNextLevel;
+
 class Creature;
 extern vector<Creature*> creatures;
+extern vector<DroppedEquipment> droppedEquipments;
+
+#define IS_VISIBLE 1
+#define IS_VISIBLE_BEFORE 2
+#define IS_WALKED_ON 4
+#define HAS_NEW_ITEM 8
 
 class Equipment {
 public:
+	int enchantCount;
 	Equipment() {
+		enchantCount = 0;
 		buffGroup = NULL;
 	}
 	int slot;
@@ -26,10 +37,27 @@ public:
 		buffGroup->buffs.push_back(buff);
 	}
 
-	virtual int goodness(Creature* creature){
+	virtual int goodness(Creature* creature) {
 		int g = 1;
-		if(buffGroup) g+=buffGroup->goodness(creature);
+		if (buffGroup) g += buffGroup->goodness(creature);
 		return g;
+	}
+};
+
+enum {
+	POTION = 0,
+	SCROLL,
+	BOOK,
+};
+
+class Consumable : public Equipment {
+public:
+	int consumeType;
+	int count;
+	Skill* skill;
+
+	int goodness(Creature* creature) override {
+		return 1;
 	}
 };
 
@@ -45,9 +73,9 @@ public:
 	}
 
 
-	int goodness(Creature* creature) override{
-		int g = 1 + (int)(((minDamage + maxDamage)*10.0f)/swingTime) + range*3;
-		if(buffGroup) g+=buffGroup->goodness(creature);
+	int goodness(Creature* creature) override {
+		int g = 1 + (int)(((minDamage + maxDamage)*10.0f) / swingTime) + range * 3;
+		if (buffGroup) g += buffGroup->goodness(creature);
 		return g;
 	}
 };
@@ -80,32 +108,37 @@ public:
 
 	Weapon* weapon;
 	Weapon* punchs;
-	vector<vector<Equipment*>> eqipmentSlots;
+	vector<vector<Equipment*>> equipmentSlots;
 
 	int level;
 
 	float minExp;
 	float maxExp;
 
+	vector<Pos> lootsToCheck;
+
 	vector<Pos> visible;
-	char visibleCells[MAZE_W][MAZE_H];
+	char mazeState[MAZE_W][MAZE_H];
 
 	Pos moveTarget;
 	vector<Pos> targetPath;
 	unsigned pathVal;
 
 	bool hasTarget;
+	bool goBelow;
 	bool isDead;
 
 	float sight;
 	float movePerTick;
 	float lastRegenTick;
 	float lastManaRegenTick;
+	float lastConsumeTick;
+
 	float tickToNextWander;
 
 	float tickToRegen;
 	float tickToManaRegen;
-
+	int consumes;
 	int fearless;
 
 	float timeToNextSkill;
@@ -121,10 +154,10 @@ public:
 	vector<Creature*> enemies;
 
 	float getTickToRegen() {
-		return tickToRegen * hpRegenMult / 1000;
+		return tickToRegen * 1000.0f / hpRegenMult;
 	}
 	float getTickToManaRegen() {
-		return tickToManaRegen * mpRegenMult / 1000;
+		return tickToManaRegen * 1000.0f / mpRegenMult;
 	}
 
 	float getExp() {
@@ -142,10 +175,13 @@ public:
 	int mpRegenMult;
 	int hpRegenMult;
 	int chanceToHit;
+	bool loots;
+	bool cantAttack;
 
 	int getWeaponDamage() {
 		return (weapon->getDamage()*damageMult) / 1000 + damageBoost;
 	}
+
 	int DR;
 
 	int getDR() {
@@ -153,11 +189,11 @@ public:
 	}
 
 	float perMoveTick() {
-		return (movePerTick * moveSpeedMult) / 1000;
+		return movePerTick * 1000.0f / moveSpeedMult;
 	}
 
 	float perAttackTick() {
-		return (weapon->swingTime * attackSpeedMult) / 1000;
+		return weapon->swingTime * 1000.0f / attackSpeedMult;
 	}
 
 	float getWanderTime() {
@@ -184,17 +220,21 @@ public:
 		tickToRegen = 150.0f;
 		tickToManaRegen = 100.0f;
 		explores = wandersAround = false;
-
-		eqipmentSlots.resize(EQ_MAX);
-
-		eqipmentSlots[WEAPON].resize(1);
-		eqipmentSlots[ARMOR].resize(1);
-		eqipmentSlots[SHIELD].resize(1);
-		eqipmentSlots[HELM].resize(1);
-		eqipmentSlots[GLOVES].resize(1);
-		eqipmentSlots[BOOTS].resize(1);
-		eqipmentSlots[RING].resize(2);
-		eqipmentSlots[AMULET].resize(1);
+		consumes = false;
+		isDead = true;
+		loots = false;
+		cantAttack = false;
+		equipmentSlots.resize(EQ_MAX);
+		equipmentSlots[WEAPON].resize(1);
+		equipmentSlots[ARMOR].resize(1);
+		equipmentSlots[SHIELD].resize(1);
+		equipmentSlots[HELM].resize(1);
+		equipmentSlots[GLOVES].resize(1);
+		equipmentSlots[BOOTS].resize(1);
+		equipmentSlots[RING].resize(2);
+		equipmentSlots[AMULET].resize(1);
+		equipmentSlots[CONSUMABLE].resize(100);
+		DR = 0;
 
 		punchs = new Weapon();
 		punchs->slot = WEAPON;
@@ -204,14 +244,15 @@ public:
 		strcpy_s(punchs->name, "Punchs");
 		punchs->range = 1;
 
-		for (unsigned i = 0; i < eqipmentSlots.size(); i++) {
-			for (unsigned j = 0; j < eqipmentSlots[i].size(); j++) {
-				eqipmentSlots[i][j] = NULL;
+		for (unsigned i = 0; i < equipmentSlots.size(); i++) {
+			for (unsigned j = 0; j < equipmentSlots[i].size(); j++) {
+				equipmentSlots[i][j] = NULL;
 			}
 		}
 		reset(Pos(-1, -1));
 		equip(punchs);
 	}
+
 	~Creature() {
 		for (unsigned i = 0; i < skills.size(); i++) {
 			delete skills[i];
@@ -220,36 +261,45 @@ public:
 			buffs[i]->end(this);
 			delete buffs[i];
 		}
-		for (unsigned i = 0; i < eqipmentSlots.size(); i++) {
-			for (unsigned j = 0; j < eqipmentSlots[i].size(); j++) {
-				if (eqipmentSlots[i][j] != NULL) {
-					if (eqipmentSlots[i][j]->buffGroup != NULL) {
-						eqipmentSlots[i][j]->buffGroup->end(this);
-						delete eqipmentSlots[i][j]->buffGroup;
+		for (unsigned i = 0; i < equipmentSlots.size(); i++) {
+			for (unsigned j = 0; j < equipmentSlots[i].size(); j++) {
+				if (equipmentSlots[i][j] != NULL) {
+					if (equipmentSlots[i][j]->buffGroup != NULL) {
+						equipmentSlots[i][j]->buffGroup->end(this);
+						delete equipmentSlots[i][j]->buffGroup;
 					}
-					delete eqipmentSlots[i][j];
+					delete equipmentSlots[i][j];
 				}
 			}
-
+		}
+		for (unsigned i = 0; i < visible.size(); i++) {
+			if (mazeState[visible[i].x][visible[i].y] | IS_VISIBLE) {
+				globalVisible[visible[i].x][visible[i].y]--;
+			}
 		}
 		if (weapon != punchs) {
 			delete punchs;
 		}
 	}
+	void resetPos(Pos pos) {
+		this->pos = pos;
+		maze.walls[pos.x][pos.y] = type;
+		memset(mazeState, 0, sizeof(mazeState));
+		visible.clear();
+		updateVisibility();
+		goBelow = false;
+	}
 
 	void reset(Pos pos) {
 		if (pos.x >= 0) {
-			this->pos = pos;
-			maze.walls[pos.x][pos.y] = type;
-			memset(visibleCells, false, sizeof(visibleCells));
-			visible.clear();
-			updateVisibility();
+			resetPos(pos);
 		}
 
 		lastTick = globalTick;
 		lastRegenTick = globalTick;
 		lastManaRegenTick = globalTick;
 		timeToNextSkill = globalTick;
+		lastConsumeTick = globalTick;
 		isDead = false;
 		hasTarget = false;
 		tickToNextWander = globalTick + getWanderTime();
@@ -258,6 +308,7 @@ public:
 		fearless = 0;
 		hp = hpMax;
 		mp = mpMax;
+		goBelow = false;
 
 		damageBoost = 0;
 		damageMult = 1000;
@@ -272,51 +323,62 @@ public:
 		punchs->minDamage = 2 + level;
 		punchs->maxDamage = punchs->minDamage + 4 + level;
 
-		DR = 0;
 	}
 
 	void updateVisibility() {
 		for (unsigned i = 0; i < visible.size(); i++) {
-			if (visibleCells[visible[i].x][visible[i].y] == 1) {
+			if (mazeState[visible[i].x][visible[i].y] | IS_VISIBLE) {
 				globalVisible[visible[i].x][visible[i].y]--;
-				visibleCells[visible[i].x][visible[i].y] = 2;
 			}
+			mazeState[visible[i].x][visible[i].y] = (~IS_VISIBLE) & mazeState[visible[i].x][visible[i].y];
 		}
 		doExplore<MAZE_W, MAZE_H>(pos, maze.walls, seeWeights, getSight(), visible, false, true);
 		for (unsigned i = 0; i < visible.size(); i++) {
-			visibleCells[visible[i].x][visible[i].y] = 1;
+			mazeState[visible[i].x][visible[i].y] |= IS_VISIBLE | IS_VISIBLE_BEFORE;
 			globalVisible[visible[i].x][visible[i].y]++;
 		}
 	}
 
 	void findTarget() {
 		hasTarget = true;
+		goBelow = false;
 		if (explores) {
 			vector<Pos> npos;
 			doExplore<MAZE_W, MAZE_H>(pos, maze.walls, addWeights, 20.0f, npos);
 			pathVal = 0;
 
-			unsigned j = npos.size();
-
-			while (j > 0) {
-				unsigned i = ran(j);
+			unsigned j = ran(npos.size());
+			for (unsigned k = 0; k < npos.size(); k++) {
+				int i = (k + j) % (npos.size());
 
 				Pos p = npos[i];
 
-				if (visibleCells[p.x][p.y] == 0 && maze.walls[p.x][p.y] == 0) {
+				if ((mazeState[p.x][p.y] & IS_VISIBLE_BEFORE) == 0 && maze.walls[p.x][p.y] == 0) {
 					moveTarget = p;
-
 					findPath<MAZE_W, MAZE_H>(pos, moveTarget, maze.walls, addWeights, 100000.0f, targetPath);
-
 					return;
 				}
-				npos[i] = npos[j - 1];
-				j--;
+			}
+			npos.clear();
+			doExplore<MAZE_W, MAZE_H>(pos, maze.walls, addWeights, 40.0f, npos);
+			pathVal = 0;
+
+			j = ran(npos.size());
+			for (unsigned k = 0; k < npos.size(); k++) {
+				int i = (k + j) % (npos.size());
+
+				Pos p = npos[i];
+
+				if ((mazeState[p.x][p.y] & IS_VISIBLE_BEFORE) == 0 && maze.walls[p.x][p.y] == 0) {
+					moveTarget = p;
+					findPath<MAZE_W, MAZE_H>(pos, moveTarget, maze.walls, addWeights, 100000.0f, targetPath);
+					return;
+				}
 			}
 
 			for (int i = 0; i < MAZE_W; i++) {
 				for (int j = 0; j < MAZE_H; j++) {
-					if (visibleCells[i][j] == 0 && maze.walls[i][j] == 0) {
+					if ((mazeState[i][j] & IS_VISIBLE_BEFORE) == 0 && maze.walls[i][j] == 0) {
 						moveTarget = Pos(i, j);
 
 						findPath<MAZE_W, MAZE_H>(pos, moveTarget, maze.walls, addWeights, 100000.0f, targetPath);
@@ -325,6 +387,11 @@ public:
 					}
 				}
 			}
+			moveTarget = maze.downstairs;
+			findPath<MAZE_W, MAZE_H>(pos, moveTarget, maze.walls, addWeights, 100000.0f, targetPath);
+			goBelow = true;
+			return;
+
 		}
 
 		hasTarget = false;
@@ -351,12 +418,14 @@ public:
 		updateVisibility();
 		return false;
 	}
+
 	void heal(int hp) {
 		this->hp += hp;
 		if (this->hp > hpMax) {
 			this->hp = hpMax;
 		}
 	}
+
 	bool tick() {
 		if (isDead) {
 			return false;
@@ -372,9 +441,9 @@ public:
 		}
 
 		master = NULL;
-
 		checkCreaturesAround();
 		checkSkills();
+		checkConsumables();
 		tickBuffs();
 		checkShouldRunAway();
 
@@ -390,12 +459,46 @@ public:
 			if (tryToApproach()) {
 				return true;
 			}
+		} else if (lootsToCheck.size() > 0) {
+			if (pos == lootsToCheck.back()) {
+				vector<Equipment*> droppedNow;
+				for (unsigned i = 0; i < droppedEquipments.size(); i++) {
+					if (droppedEquipments[i].p == pos) {
+						Equipment* old = NULL;
+						if (checkEquip(droppedEquipments[i].e, &old)) {
+							char buff[128];
+							if (old) {
+								droppedNow.push_back(old);
+								sprintf_s(buff, "%s#%d drops %s and equips %s!", name, index, old->name, droppedEquipments[i].e->name);
+							} else {
+								sprintf_s(buff, "%s#%d equips %s!", droppedEquipments[i].e->name);
+							}
+							pushMessage(buff);
+
+							droppedEquipments[i] = droppedEquipments[droppedEquipments.size() - 1];
+							i--;
+							droppedEquipments.resize(droppedEquipments.size() - 1);
+							continue;
+						}
+					}
+				}
+				for (unsigned i = 0; i < droppedNow.size(); i++) {
+					dropEquipment(droppedNow[i]);
+				}
+
+				hasTarget = false;
+				mazeState[pos.x][pos.y] &= ~HAS_NEW_ITEM;
+				lootsToCheck.resize(lootsToCheck.size() - 1);
+				return true;
+			} else if (hasTarget == false || moveTarget != lootsToCheck.back()) {
+				hasTarget = true;
+				moveTarget = lootsToCheck.back();
+				findPath<MAZE_W, MAZE_H>(pos, moveTarget, maze.walls, addWeights, 100000.0f, targetPath);
+				return true;
+			}
 		} else if (hp < hpMax / 3) {
 			return false;
 		} else if (!hasTarget && explores) {
-			if (wantsToRun) {
-				return false;
-			}
 			findTarget();
 		} else if (wandersAround && tickToNextWander < globalTick &&  globalTick - lastTick >= perMoveTick()) {
 			if (tryToWander()) {
@@ -403,10 +506,12 @@ public:
 			}
 		}
 
-		if (tryToGoTarget()) {
-			return true;
-		}
+		if (hasTarget) {
+			if (tryToGoTarget()) {
+				return true;
+			}
 
+		}
 		return false;
 	}
 
@@ -425,12 +530,69 @@ public:
 		}
 		if (hp <= 0) {
 			hp = 0;
-			isDead = true;
-			maze.walls[pos.x][pos.y] = 0;
-			char buff[128];
-			sprintf_s(buff, "%s#%d dies!", name, index);
-			pushMessage(buff);
+			die();
 		}
+	}
+
+	bool checkEquip(Equipment* toEquip, Equipment** old) {
+		int good = toEquip->goodness(this);
+		if (good <= 0) {
+			return false;
+		} else {
+			int minIndex = -1;
+			int minGood = 10000000;
+			for (unsigned i = 0; i < equipmentSlots[toEquip->slot].size(); i++) {
+				if (equipmentSlots[toEquip->slot][i] == NULL) {
+					minIndex = i;
+					minGood = 0;
+				} else {
+					int goodEquiped = equipmentSlots[toEquip->slot][i]->goodness(this);
+					if (goodEquiped < minGood) {
+						minIndex = i;
+						minGood = goodEquiped;
+					}
+				}
+			}
+
+			if (minGood < good && minIndex != -1) {
+				*old = equipmentSlots[toEquip->slot][minIndex];
+				deequip(equipmentSlots[toEquip->slot][minIndex]);
+				equip(toEquip);
+				return true;
+			}
+			return false;
+		}
+	}
+
+	void dropEquipment(Equipment* e) {
+		if (e == NULL) return;
+		for (unsigned i = 0; i < creatures.size(); i++) {
+			creatures[i]->mazeState[pos.x][pos.y] |= HAS_NEW_ITEM;
+		}
+		DroppedEquipment eq;
+		eq.e = e;
+		eq.p = pos;
+		droppedEquipments.push_back(eq);
+	}
+
+	void die() {
+		for (unsigned i = 0; i < equipmentSlots.size(); i++) {
+			for (unsigned j = 0; j < equipmentSlots[i].size(); j++) {
+				if (equipmentSlots[i][j] != punchs && equipmentSlots[i][j] != NULL && ran(1) == 0) {
+					Equipment*e = equipmentSlots[i][j];
+					equipmentSlots[i][j] = NULL;
+					dropEquipment(e);
+				}
+			}
+		}
+		if (ran(5) == 0) {
+			dropEquipment(getConsumable(level));
+		}
+		isDead = true;
+		maze.walls[pos.x][pos.y] = 0;
+		char buff[128];
+		sprintf_s(buff, "%s#%d dies!", name, index);
+		pushMessage(buff);
 	}
 
 	bool isEnemy(int type) {
@@ -447,10 +609,18 @@ public:
 		enemies.clear();
 		creaturesToAttack.clear();
 		creaturesToMove.clear();
-
+		if (cantAttack) {
+			return;
+		}
 		for (unsigned i = 0; i < visible.size(); i++) {
 			Pos p = visible[i];
 			if (p == pos) continue;
+
+			if (loots && mazeState[visible[i].x][visible[i].y] & HAS_NEW_ITEM) {
+				lootsToCheck.push_back(p);
+				mazeState[visible[i].x][visible[i].y] &= ~HAS_NEW_ITEM;
+			}
+
 			if (maze.walls[p.x][p.y] > 10) {
 				Creature* creature = NULL;
 				for (unsigned i = 0; i < creatures.size(); i++) {
@@ -460,7 +630,7 @@ public:
 					}
 				}
 				if (creature == NULL) continue;
-				if (isEnemy(maze.walls[p.x][p.y])) {
+				if (isEnemy(creature->type)) {
 					enemies.push_back(creature);
 					hasTarget = false;
 
@@ -483,16 +653,57 @@ public:
 		}
 
 	}
+	void checkConsumables() {
+		if (!consumes) {
+			return;
+		}
+		if (lastConsumeTick + 10.0f <= globalTick) {
+			int itemToConsume = -1;
+			int maxPriority = -1;
+			for (unsigned i = 0; i < equipmentSlots[CONSUMABLE].size(); i++) {
+				Consumable* consumable = ((Consumable*)equipmentSlots[CONSUMABLE][i]);
+				if (!consumable) continue;
+				int skillVal = consumable->skill->shouldCast(this, allies, enemies, creaturesToAttack, creaturesToMove);
+				if (skillVal && skillVal > maxPriority) {
+					maxPriority = skillVal;
+					itemToConsume = i;
+				}
+			}
 
+			if (itemToConsume != -1) {
+				Consumable* consumable = ((Consumable*)equipmentSlots[CONSUMABLE][itemToConsume]);
+
+				char buff[128];
+				if (consumable->consumeType == POTION) {
+					sprintf_s(buff, "%s#%d quaffs a %s.", name, index, consumable->name);
+				} else 	if (consumable->consumeType == SCROLL) {
+					sprintf_s(buff, "%s#%d reads %s.", name, index, consumable->name);
+				} else 	if (consumable->consumeType == BOOK) {
+					sprintf_s(buff, "%s#%d read a page from %s.", name, index, consumable->name);
+				}
+
+				pushMessage(buff);
+
+
+				consumable->skill->doCast(this, allies, enemies, creaturesToAttack, creaturesToMove);
+				consumable->count--;
+				if (consumable->count == 0) {
+					delete consumable;
+					equipmentSlots[CONSUMABLE][itemToConsume] = NULL;
+				}
+				lastConsumeTick = globalTick;
+			}
+		}
+	}
 	void checkSkills() {
 		if (timeToNextSkill <= globalTick) {
 			int skillToCast = -1;
-			int minSkillVal = 100000;
+			int maxPriority = -1;
 			for (unsigned i = 0; i < skills.size(); i++) {
 				if (mp >= skills[i]->manaCost && skills[i]->timeToNextCast <= globalTick) {
 					int skillVal = skills[i]->shouldCast(this, allies, enemies, creaturesToAttack, creaturesToMove);
-					if (skillVal && skillVal < minSkillVal) {
-						minSkillVal = skillVal;
+					if (skillVal && skillVal > maxPriority) {
+						maxPriority = skillVal;
 						skillToCast = i;
 					}
 				}
@@ -603,9 +814,6 @@ public:
 		if (globalTick - lastTick >= perAttackTick()) {
 			bool reattack = false;
 
-			if (type == ADVENTURER) {
-				int a = 5;
-			}
 			int attackIndex;
 			for (unsigned i = 0; i < creaturesToAttack.size(); i++) {
 				if (creaturesToAttack[i]->index == lastAttackCreatureIndex) {
@@ -659,12 +867,12 @@ public:
 				int min_i = -1;
 				for (unsigned i = 0; i < creaturesToMove.size(); i++) {
 					int d = dist(pos, creaturesToMove[i]->pos);
-					if(min > d){
+					if (min > d) {
 						min = d;
 						min_i = i;
 					}
 				}
-				if(min_i != -1){
+				if (min_i != -1) {
 					found = findPath<MAZE_W, MAZE_H>(pos, creaturesToMove[min_i]->pos, maze.walls, moveWeights, min*2.0f, targetPath);
 					if (found) {
 						moveToPos(targetPath[0]);
@@ -732,42 +940,64 @@ public:
 
 	bool tryToGoTarget() {
 		if (hasTarget && globalTick - lastTick >= perMoveTick()) {
-			pathVal++;
-			if (pathVal >= targetPath.size()) {
+			if (pos == moveTarget || pathVal >= targetPath.size()) {
+				if (pos == moveTarget && goBelow) {
+					gotoNextLevel = true;
+					hasTarget = false;
+					return true;
+				}
+
 				findTarget();
 				return true;
 			}
 			lastTick = globalTick;
 			moveToPos(targetPath[pathVal]);
+			pathVal++;
 			return true;
 		}
 		return false;
 	}
+	bool deequip(Equipment *&equipment) {
+		if (equipment == NULL) return false;
+		if (equipment->buffGroup) {
+			equipment->buffGroup->end(this);
+		}
+		equipment = NULL;
+		return true;
+	}
+
 
 	bool equip(Equipment* equipment) {
 		if (equipment == NULL) return false;
 		int slot = equipment->slot;
+		if (slot == CONSUMABLE) {
+			for (unsigned i = 0; i < equipmentSlots[slot].size(); i++) {
+				if (equipmentSlots[slot][i] != NULL && equipmentSlots[slot][i]->type == equipment->type) {
+					((Consumable*)equipmentSlots[slot][i])->count++;
+					delete equipment;
+					return true;
+				}
+			}
+		}
+
 		int emptyIndex = -1;
-		for (unsigned i = 0; i < eqipmentSlots[slot].size(); i++) {
-			if (eqipmentSlots[slot][i] == NULL) {
+		for (unsigned i = 0; i < equipmentSlots[slot].size(); i++) {
+			if (equipmentSlots[slot][i] == NULL) {
 				emptyIndex = i;
 				break;
 			}
 		}
 
 		if (emptyIndex == -1) {
-			emptyIndex = ran(eqipmentSlots[slot].size());
-
-			if (eqipmentSlots[slot][emptyIndex] != punchs) {
-				if (eqipmentSlots[slot][emptyIndex]->buffGroup) {
-					eqipmentSlots[slot][emptyIndex]->buffGroup->end(this);
-				}
-				delete eqipmentSlots[slot][emptyIndex];
-				eqipmentSlots[slot][emptyIndex] = NULL;
+			emptyIndex = ran(equipmentSlots[slot].size());
+			Equipment* e = equipmentSlots[slot][emptyIndex];
+			if (e != punchs) {
+				deequip(equipmentSlots[slot][emptyIndex]);
+				delete e;
 			}
 		}
 
-		eqipmentSlots[slot][emptyIndex] = equipment;
+		equipmentSlots[slot][emptyIndex] = equipment;
 		if (equipment->buffGroup) {
 			equipment->buffGroup->start(this);
 		}
@@ -775,12 +1005,6 @@ public:
 		if (slot == WEAPON) {
 			weapon = (Weapon*)equipment;
 		}
-
 		return true;
 	}
-
-
-
-
-
 };

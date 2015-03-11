@@ -125,11 +125,9 @@ void initTools() {
 
 };
 
-
 int dist(Pos& p1, Pos& p2) {
 	return abs(p1.x - p2.x) + abs(p1.y - p2.y);
 }
-
 
 int getReverseDir(int dir) {
 	if (dir < 4) {
@@ -225,27 +223,30 @@ Buff* getBuff(vector<int>& weights, int level) {
 	for (unsigned i = 0; i < weights.size(); i++) {
 		totalWeight += weights[i];
 	}
-	if (totalWeight == 0) return NULL;
-
-	int r = ran(totalWeight);
 	int buffType = -1;
+	if (totalWeight != 0) {
+		int r = ran(totalWeight);
 
-	for (unsigned i = 0; i < weights.size(); i++) {
-		if (r < weights[i]) {
-			buffType = i;
-			break;
+		for (unsigned i = 0; i < weights.size(); i++) {
+			if (r < weights[i]) {
+				buffType = i;
+				break;
+			}
+			r -= weights[i];
 		}
-		r -= weights[i];
+	} else {
+		buffType = rani(1, BUFF_CNT - 1);
 	}
+
 	if (buffType <= 0) return NULL;
 	Buff* buff = NULL;
 	int min, max;
 	switch (buffType) {
 		case ATK_SPEED:
-			buff = new AtkSpeedBuff(100 - ran(level / 4 + 1) * 5 - (level / 6) * 5 - 5);
+			buff = new AtkSpeedBuff(100 + ran(level / 4 + 1) * 5 + (level / 6) * 5 + 5);
 			break;
 		case MV_SPEED:
-			buff = new MoveSpeedBuff(100 - ran(level / 4 + 1) * 5 - (level / 6) * 5 - 5);
+			buff = new MoveSpeedBuff(100 + ran(level / 4 + 1) * 5 + (level / 6) * 5 + 5);
 			break;
 		case DR_ADD:
 			buff = new DRBuff(1 + ran(level / 2 + 2));
@@ -278,12 +279,11 @@ Buff* getBuff(vector<int>& weights, int level) {
 			buff = new PlusDamageBuff(min, max, "Ice", getColorIndex(0, 7, 7));
 			break;
 		case EVASION:
-			buff = new EvasionBuff(100 + ran(level / 4 + 1) * 5 + (level / 6) * 5 + 10, false);
+			buff = new EvasionBuff(100 - ran(level / 4 + 1) * 5 - (level / 6) * 5 - 5, false);
 			break;
 		case BLOCK:
-			buff = new EvasionBuff(100 + ran(level / 4 + 1) * 5 + (level / 6) * 5 + 10, true);
+			buff = new EvasionBuff(100 - ran(level / 4 + 1) * 5 - (level / 6) * 5 - 5, true);
 			break;
-
 		case HP:
 			buff = new HpBuff(10 + ran(level / 2 + 2) * 5);
 			break;

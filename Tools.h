@@ -83,6 +83,12 @@ public:
 		return (x != other.x || y != other.y);
 	}
 };
+class Equipment;
+class DroppedEquipment {
+public:
+	Pos p;
+	Equipment* e;
+};
 
 class Creature;
 
@@ -98,17 +104,18 @@ public:
 	int color;
 };
 
-
-#define WEAPON 0
-#define ARMOR 1
-#define SHIELD 2
-#define HELM 3
-#define GLOVES 4
-#define BOOTS 5
-#define RING 6
-#define AMULET 7
-#define EQ_MAX 8
-
+enum {
+	WEAPON = 0,
+	ARMOR,
+	SHIELD,
+	HELM,
+	GLOVES,
+	BOOTS,
+	RING,
+	AMULET,
+	CONSUMABLE,
+	EQ_MAX
+};
 extern char eqipmentNames[EQ_MAX][32];
 extern int eqipmentIcons[EQ_MAX];
 
@@ -200,9 +207,6 @@ bool doSearchExplore(Pos startPos, int arr[W][H], unordered_map<int, float> weig
 
 		for (int i = revPath.size() - 1; i >= 0; i--) {
 			path.push_back(revPath[i]);
-			if (i == 0) {
-				int a = 5;
-			}
 		}
 	}
 	return found;

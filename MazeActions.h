@@ -9,9 +9,10 @@ Creature* generateCreature(Pos pos, int level, int modif, int type = GOBLIN) {
 		return NULL;
 	}
 
-	if (creatures[0]->visibleCells[pos.x][pos.y] == 1) {
+	if (globalVisible[pos.x][pos.y] != 0) {
 		return NULL;
 	}
+
 	Creature* c = NULL;
 	if (type == GOBLIN) {
 		c = generateGoblin(level + ran(4) / 3, pos);
@@ -19,20 +20,20 @@ Creature* generateCreature(Pos pos, int level, int modif, int type = GOBLIN) {
 			c->hpMax += 10 + 5 * level;
 			c->mpMax += 40 + 20 * level;
 			if (modif == PRIEST) {
-				c->skills.push_back(new HealSkill(c));
+				c->skills.push_back(new HealSkill());
 				strcat_s(c->name, " Priest");
 				c->pixel.color = getColorIndex(0, 4, 6);
 			} else if (modif == MAGE) {
 				c->pixel.color = getColorIndex(6, 2, 4);
 				switch (ran(3)) {
 					case 0:
-						c->skills.push_back(new LightingSkill(c));
+						c->skills.push_back(new LightingSkill());
 						break;
 					case 1:
-						c->skills.push_back(new IceBoltSkill(c));
+						c->skills.push_back(new IceBoltSkill());
 						break;
 					case 2:
-						c->skills.push_back(new FireBallSkill(c));
+						c->skills.push_back(new FireBallSkill());
 						break;
 				}
 
@@ -43,7 +44,7 @@ Creature* generateCreature(Pos pos, int level, int modif, int type = GOBLIN) {
 			c->hpMax += 10 + 5 * level;
 			c->mpMax += 30 + 10 * level;
 			c->movePerTick *= 0.8f;
-			c->skills.push_back(new PoisonBladeSkill(c));
+			c->skills.push_back(new PoisonBladeSkill());
 			strcat_s(c->name, " Rogue");
 		} else if (modif == FIGHTER) {
 			c->pixel.color = getColorIndex(2, 6, 2);
@@ -72,7 +73,7 @@ bool generateCreatureGroup(Pos pos, vector<Creature*> &group, int level, int typ
 
 	bool ret = true;
 	int j = npos.size();
-	int t = ran(3) + 1;
+	int t = ran(3) + 2;
 
 	int masterIndex = -1;
 

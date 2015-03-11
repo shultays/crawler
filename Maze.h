@@ -9,6 +9,8 @@ public:
 	int fourWayPathChance;
 	int stopChance;
 
+	Pos downstairs;
+	Pos upstairs;
 
 	char arr[MAZE_W / 3][MAZE_H / 3];
 
@@ -147,7 +149,7 @@ public:
 
 	void genRand(int n) {
 		memset(arr, 0, sizeof(arr));
-		memset(room, 0, sizeof(room));
+		memset(room, -1, sizeof(room));
 		memset(walls, 0, sizeof(walls));
 		roomPos.clear();
 		genRooms();
@@ -156,7 +158,8 @@ public:
 		connectRooms();
 		fixSides();
 		checkUnreached();
-
+		upstairs = roomPos[0];
+		downstairs = roomPos[roomPos.size() - 1];
 		for (int i = 0; i < MAZE_W; i++) {
 			for (int j = 0; j < MAZE_H; j++) {
 				if (walls[i][j] == 0) {
@@ -257,7 +260,7 @@ public:
 		weights[1] = 20.0f;
 		weights[2] = 20.0f;
 		vector<Pos> path;
-		doSearch<MAZE_W, MAZE_H>(startPos, walls, weights, 10000000, room, j, foundPos, path, true);
+		doSearch<MAZE_W, MAZE_H>(startPos, walls, weights, 20000000, room, j + 1, foundPos, path, true);
 
 		for (unsigned i = 0; i < path.size(); i++) {
 			Pos pos = path[i];
@@ -267,7 +270,6 @@ public:
 
 		printw(" done\n"); refresh();
 	}
-
 
 	void connectRooms() {
 		printw("connectRooms...\n"); refresh();
@@ -508,11 +510,6 @@ public:
 					float fourWayMult = nCount >= 3 ? 1.0f : 0.0f;
 					float stopMult = nodes.size() > 1 ? 1.0f : 0.0f;
 
-					printw("%d << %d %d << %d %f %f %f %f  << %d %d %d\n", n.dir, n.pos.x, n.pos.y, noActionChance, changeDirMult, threeWayMult, fourWayMult, stopMult, left, right, front);
-					//write();
-					if (n.pos.x == 12 && n.pos.y == 10) {
-						int a = 5;
-					}
 					int nextAction = getRandomAction(noActionChance, changeDirMult, threeWayMult, fourWayMult, stopMult);
 
 					int oldDir = getReverseDir(n.dir);

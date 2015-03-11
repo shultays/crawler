@@ -23,6 +23,7 @@ public:
 	virtual void printStats(Creature* creature, int &x, int &y) = 0;
 	virtual int goodness(Creature* creature) = 0;
 	virtual ~Buff() {}
+	virtual void improve() = 0;
 };
 
 class DRBuff : public Buff {
@@ -32,6 +33,11 @@ public:
 	DRBuff(int buff) : Buff() {
 		name[0] = 0;
 		this->buff = buff;
+	}
+
+	void improve() {
+		buff++;
+		if (buff == 0) buff = 1;
 	}
 
 	void printStats(Creature* creature, int &x, int &y) {
@@ -52,7 +58,7 @@ public:
 	void tick(Creature* creature) {}
 
 	int goodness(Creature* creature) {
-		return buff*10;
+		return buff * 4;
 	}
 };
 
@@ -65,6 +71,10 @@ public:
 		this->buff = buff;
 	}
 
+	void improve() {
+		buff += rani(1, 3) * 5;
+		if (buff == 0) buff = 5;
+	}
 	void printStats(Creature* creature, int &x, int &y) {
 		int good = goodness(creature);
 		attrset(COLOR_PAIR(getColorIndex(good <= 0 ? 7 : 0, good >= 0 ? 7 : 0, 0)));
@@ -83,9 +93,10 @@ public:
 	void tick(Creature* creature) {}
 
 	int goodness(Creature* creature) {
-		return buff*3;
+		return (int)((buff > 0 ? 1 : 0) + (buff < 0 ? -1 : 0) + buff * 0.5f);
 	}
 };
+
 class MpBuff : public Buff {
 public:
 	int buff;
@@ -93,6 +104,11 @@ public:
 	MpBuff(int buff) : Buff() {
 		name[0] = 0;
 		this->buff = buff;
+	}
+
+	void improve() {
+		buff += rani(1, 3) * 5;
+		if (buff == 0) buff = 5;
 	}
 
 	void printStats(Creature* creature, int &x, int &y) {
@@ -113,9 +129,10 @@ public:
 	void tick(Creature* creature) {}
 
 	int goodness(Creature* creature) {
-		return buff*2;
+		return (int)((buff > 0 ? 1 : 0) + (buff < 0 ? -1 : 0) + buff * 0.35f);
 	}
 };
+
 class ConstantDMGBoost : public Buff {
 public:
 	int buff;
@@ -125,6 +142,10 @@ public:
 		this->buff = buff;
 	}
 
+	void improve() {
+		buff += rani(1, 5);
+		if (buff == 0) buff = 2;
+	}
 	void printStats(Creature* creature, int &x, int &y) {
 		int good = goodness(creature);
 		attrset(COLOR_PAIR(getColorIndex(good <= 0 ? 7 : 0, good >= 0 ? 7 : 0, 0)));
@@ -143,19 +164,24 @@ public:
 	void tick(Creature* creature) {}
 
 	int goodness(Creature* creature) {
-		return buff * 2;
+		return buff;
 	}
 };
 
 class DMGBultBuff : public Buff {
 public:
 	int buff;
-
 	int addedBuff;
 
 	DMGBultBuff(int buff) : Buff() {
 		name[0] = 0;
+		if (buff < 10) buff = 10;
 		this->buff = buff;
+	}
+
+	void improve() {
+		buff += 5;
+		if (buff == 0) buff = 5;
 	}
 
 	void printStats(Creature* creature, int &x, int &y) {
@@ -177,7 +203,7 @@ public:
 	void tick(Creature* creature) {}
 
 	int goodness(Creature* creature) {
-		return (int)((buff - 100)*1.5f);
+		return (int)((buff > 100 ? 1 : 0) + (buff < 100 ? -1 : 0) + (buff - 100) * 1.5f);
 	}
 };
 
@@ -189,7 +215,13 @@ public:
 
 	MoveSpeedBuff(int buff) : Buff() {
 		name[0] = 0;
+		if (buff < 10) buff = 10;
 		this->buff = buff;
+	}
+
+	void improve() {
+		buff += 5;
+		if (buff == 0) buff = 5;
 	}
 
 	void printStats(Creature* creature, int &x, int &y) {
@@ -211,19 +243,24 @@ public:
 	void tick(Creature* creature) {}
 
 	int goodness(Creature* creature) {
-		return (100 - buff);
+		return (int)((buff > 100 ? 1 : 0) + (buff < 100 ? -1 : 0) + (buff - 100) * 1.1f);
 	}
 };
 
 class AtkSpeedBuff : public Buff {
 public:
 	int buff;
-
 	int addedBuff;
 
 	AtkSpeedBuff(int buff) : Buff() {
 		name[0] = 0;
+		if (buff < 10) buff = 10;
 		this->buff = buff;
+	}
+
+	void improve() {
+		buff += 5;
+		if (buff == 0) buff = 5;
 	}
 
 	void printStats(Creature* creature, int &x, int &y) {
@@ -245,7 +282,7 @@ public:
 	void tick(Creature* creature) {}
 
 	int goodness(Creature* creature) {
-		return (100 - buff);
+		return (int)((buff > 100 ? 1 : 0) + (buff < 100 ? -1 : 0) + (buff - 100) * 1.2f);
 	}
 };
 
@@ -257,7 +294,13 @@ public:
 
 	SightBuff(int buff) : Buff() {
 		name[0] = 0;
+		if (buff < 20) buff = 10;
 		this->buff = buff;
+	}
+
+	void improve() {
+		buff += 5;
+		if (buff == 0) buff = 5;
 	}
 
 	void printStats(Creature* creature, int &x, int &y) {
@@ -279,10 +322,7 @@ public:
 	void tick(Creature* creature) {}
 
 	int goodness(Creature* creature) {
-		if(buff == 100) return 0;
-		int val = abs(buff - 100)/5 + 1;
-
-		return buff>100?+val:-val;
+		return (int)((buff > 100 ? 1 : 0) + (buff < 100 ? -1 : 0) + (buff - 100) * 0.35f);
 	}
 };
 
@@ -294,8 +334,15 @@ public:
 
 	EvasionBuff(int buff, bool isBlock = false) : Buff() {
 		name[0] = 0;
+		if (buff < 10) buff = 10;
 		this->buff = buff;
 		this->isBlock = isBlock;
+	}
+
+	void improve() {
+		buff -= 5;
+		if (buff < 10) buff = 10;
+		if (buff == 100) buff = 95;
 	}
 
 	void printStats(Creature* creature, int &x, int &y) {
@@ -309,7 +356,7 @@ public:
 			ypush = 1;
 		}
 		mvaddch(x, y + ypush, g > 0 ? ACS_UARROW : ACS_DARROW);
-		mvprintw(x++, y + 2 + ypush, "%s : %c%%%d", isBlock ? "%BLCK" : "%EVSN", (buff - 100) > 0 ? '+' : '-', abs(buff - 100));
+		mvprintw(x++, y + 2 + ypush, "%s : %c%%%d", isBlock ? "%BLCK" : "%EVSN", (100 - buff) > 0 ? '+' : '-', abs(100 - buff));
 	}
 
 	void start(Creature* creature);
@@ -317,10 +364,9 @@ public:
 	void tick(Creature* creature) {}
 
 	int goodness(Creature* creature) {
-		return (int)((buff - 100)*1.2f);
+		return -(int)((buff > 100 ? 1 : 0) + (buff < 100 ? -1 : 0) + (buff - 100) * 1.5f);
 	}
 };
-
 
 class HpRegenBuff : public Buff {
 public:
@@ -330,7 +376,13 @@ public:
 
 	HpRegenBuff(int buff) : Buff() {
 		name[0] = 0;
+		if (buff < 10) buff = 0;
 		this->buff = buff;
+	}
+
+	void improve() {
+		buff += 5;
+		if (buff == 100) buff = 105;
 	}
 
 	void printStats(Creature* creature, int &x, int &y) {
@@ -352,7 +404,7 @@ public:
 	void tick(Creature* creature) {}
 
 	int goodness(Creature* creature) {
-		return buff - 100;
+		return (int)((buff > 100 ? 1 : 0) + (buff < 100 ? -1 : 0) + (buff - 100) * 0.65f);
 	}
 };
 
@@ -364,7 +416,13 @@ public:
 
 	MpRegenBuff(int buff) : Buff() {
 		name[0] = 0;
+		if (buff < 10) buff = 0;
 		this->buff = buff;
+	}
+
+	void improve() {
+		buff += 5;
+		if (buff == 100) buff = 105;
 	}
 
 	void printStats(Creature* creature, int &x, int &y) {
@@ -386,7 +444,7 @@ public:
 	void tick(Creature* creature) {}
 
 	int goodness(Creature* creature) {
-		return buff - 100;
+		return (int)((buff > 100 ? 1 : 0) + (buff < 100 ? -1 : 0) + (buff - 100) * 0.35f);
 	}
 };
 
@@ -399,6 +457,12 @@ public:
 	virtual ~BuffGroup() {
 		for (unsigned i = 0; i < buffs.size(); i++) {
 			delete buffs[i];
+		}
+	}
+
+	void improve() {
+		for (unsigned i = 0; i < buffs.size(); i++) {
+			buffs[i]->improve();
 		}
 	}
 
@@ -467,14 +531,14 @@ public:
 	void end(Creature* creature);
 	void tick(Creature* creature) {}
 
-	int goodness(Creature* creature){
+	int goodness(Creature* creature) {
 		return BuffGroup::goodness(creature) - 5;
 	}
 };
 
 class SlowBuff : public BuffGroup {
 public:
-	SlowBuff(int atkPer = 110, int mvPer = 110) : BuffGroup() {
+	SlowBuff(int atkPer = 90, int mvPer = 90) : BuffGroup() {
 		strcpy_s(name, "Slowed");
 		buffs.push_back(new AtkSpeedBuff(atkPer));
 		buffs.push_back(new MoveSpeedBuff(mvPer));
@@ -495,15 +559,19 @@ public:
 		strcpy_s(name, "");
 	}
 
+	void improve() {
+		dotDamage += 2;
+	}
+
 	void printStats(Creature* creature, int &x, int &y) {
-		attrset(COLOR_PAIR(getColorIndex(goodness(creature) > 0 ? 0 : 7, goodness(creature) < 0 ? 7 : 0, 0)));
+		attrset(COLOR_PAIR(getColorIndex(goodness(creature) <= 0 ? 7 : 0, goodness(creature) >= 0 ? 7 : 0, 0)));
 		mvprintw(x++, y, "%s", name);
 	}
 	void start(Creature* creature);
 	void end(Creature* creature);
 	void tick(Creature* creature);
 
-	int goodness(Creature* creature) { return -dotDamage; }
+	int goodness(Creature* creature) { return -dotDamage * 3; }
 };
 
 class PoisonBladeBuff : public Buff, public AttackListener {
@@ -515,7 +583,9 @@ public:
 		this->poisonDamage = poisonDamage;
 		ticksPerDamage = 30;
 	}
-
+	void improve() {
+		this->poisonDamage++;
+	}
 	void printStats(Creature* creature, int &x, int &y) {
 		attrset(COLOR_PAIR(getColorIndex(0, 7, 0)));
 		mvprintw(x++, y, "%s", name);
@@ -525,7 +595,7 @@ public:
 	void end(Creature* creature);
 	void tick(Creature* creature) {}
 
-	int goodness(Creature* creature) { return poisonDamage*2; }
+	int goodness(Creature* creature) { return poisonDamage * 3; }
 
 	void PoisonBladeBuff::attacked(Creature* attacker, Creature* defender, int damage);
 };
@@ -536,6 +606,13 @@ public:
 	int maxDamage;
 	int color;
 	char *damageType;
+
+	void improve() {
+		int t;
+		this->minDamage += t = ran(3) + 3;
+		this->minDamage += t + ran(3);
+	}
+
 	PlusDamageBuff(int minDamage, int maxDamage, char* damageType, int color) : Buff() {
 		sprintf_s(name, "%s damage (%d - %d)", damageType, minDamage, maxDamage);
 		this->minDamage = minDamage;
@@ -553,11 +630,32 @@ public:
 	void end(Creature* creature);
 	void tick(Creature* creature) {}
 
-	int goodness(Creature* creature) { return (minDamage+maxDamage)/3+1; }
+	int goodness(Creature* creature) { return (minDamage + maxDamage) + 1; }
 
 	void attacked(Creature* attacker, Creature* defender, int damage);
 };
 
+class CharmedBuff : public Buff {
+public:
+
+	void improve() {}
+
+	CharmedBuff() : Buff() {
+		strcpy_s(name, "Charmed");
+	}
+
+	void printStats(Creature* creature, int &x, int &y) {
+		attrset(COLOR_PAIR(getColorIndex(7, 0, 7)));
+		mvprintw(x++, y, "%s", name);
+	}
+
+	void start(Creature* creature);
+	void end(Creature* creature);
+	void tick(Creature* creature) {}
+
+	int goodness(Creature* creature) { return 0;; }
+
+};
 class Skill {
 public:
 	char name[32];
@@ -565,15 +663,16 @@ public:
 	float timeToNextCast;
 	float globalSpellDelay;
 	float delayToNextCast;
+	bool print;
 
-	Skill(Creature* creature);
+	Skill();
 	virtual int shouldCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove) = 0;
 	virtual void doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove) = 0;
 };
 
 class BerserkSkill : public Skill {
 public:
-	BerserkSkill(Creature* creature) : Skill(creature) {
+	BerserkSkill() : Skill() {
 		strcpy_s(name, "Berserk");
 		manaCost = 40;
 		delayToNextCast = 500.0f;
@@ -587,7 +686,7 @@ public:
 class SingleTargetSkill : public Skill {
 public:
 	Creature* creatureToCast;
-	SingleTargetSkill(Creature* creature) : Skill(creature) {
+	SingleTargetSkill() : Skill() {
 
 	}
 	int shouldCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove);
@@ -598,7 +697,7 @@ class LightingSkill : public SingleTargetSkill {
 public:
 	int minDamage;
 	int maxDamage;
-	LightingSkill(Creature* creature) : SingleTargetSkill(creature) {
+	LightingSkill() : SingleTargetSkill() {
 		strcpy_s(name, "Lighting");
 		manaCost = 30;
 		minDamage = 2;
@@ -613,7 +712,7 @@ class FireBallSkill : public SingleTargetSkill {
 public:
 	int minDamage;
 	int maxDamage;
-	FireBallSkill(Creature* creature) : SingleTargetSkill(creature) {
+	FireBallSkill() : SingleTargetSkill() {
 		strcpy_s(name, "Fire Ball");
 		manaCost = 30;
 		minDamage = 4;
@@ -628,7 +727,7 @@ class IceBoltSkill : public SingleTargetSkill {
 public:
 	int minDamage;
 	int maxDamage;
-	IceBoltSkill(Creature* creature) : SingleTargetSkill(creature) {
+	IceBoltSkill() : SingleTargetSkill() {
 		strcpy_s(name, "Ice Bolt");
 		manaCost = 30;
 		minDamage = 4;
@@ -642,7 +741,7 @@ public:
 class PoisonBladeSkill : public Skill {
 public:
 	int poisonDamage;
-	PoisonBladeSkill(Creature* creature, int poisonDamage = 4) : Skill(creature) {
+	PoisonBladeSkill(int poisonDamage = 4) : Skill() {
 		strcpy_s(name, "Lighting");
 		manaCost = 0;
 		delayToNextCast = 200.0f;
@@ -658,14 +757,83 @@ public:
 	Creature* creatureToHeal;
 	int healMin;
 	int healMax;
+	int healPercent;
+	int percentHeal;
+	bool canHealOther;
 
-	HealSkill(Creature* creature) : Skill(creature) {
+	HealSkill(int healMin = 20, int healMax = 40, int percentHeal = 10, bool canHealOther = true) : Skill() {
 		strcpy_s(name, "Heal");
 		manaCost = 20;
 		delayToNextCast = 500.0f;
 		globalSpellDelay = 10.0f;
-		healMin = 20;
-		healMax = 40;
+		this->healMin = healMin;
+		this->healMax = healMax;
+		this->percentHeal = percentHeal;
+		this->canHealOther = canHealOther;
+	}
+
+	int shouldCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove);
+	void doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove);
+};
+
+class ManaSkill : public Skill {
+public:
+	ManaSkill() : Skill() {
+		strcpy_s(name, "Mana");
+		manaCost = 20;
+		delayToNextCast = 500.0f;
+		globalSpellDelay = 10.0f;
+	}
+
+	int shouldCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove);
+	void doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove);
+};
+
+class RegenSkill : public Skill {
+public:
+	RegenSkill() : Skill() {
+		strcpy_s(name, "Regen");
+	}
+
+	int shouldCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove);
+	void doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove);
+};
+
+
+class CharmSkill : public Skill {
+public:
+	CharmSkill() : Skill() {
+		strcpy_s(name, "Heal");
+		manaCost = 20;
+		delayToNextCast = 500.0f;
+		globalSpellDelay = 10.0f;
+	}
+
+	int shouldCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove);
+	void doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove);
+};
+
+class EnchantSkill : public Skill {
+public:
+	bool isWeapon;
+	int total;
+	EnchantSkill(bool isWeapon) : Skill() {
+		this->isWeapon = isWeapon;
+		if (isWeapon)
+			strcpy_s(name, "Enchant Weapon");
+		else
+			strcpy_s(name, "Enchant Armor");
+	}
+
+	int shouldCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove);
+	void doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove);
+};
+
+class SummonSkill : public Skill {
+public:
+	int type;
+	SummonSkill(int type) : Skill() {
+		this->type = type;
 	}
 
 	int shouldCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove);

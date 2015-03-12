@@ -91,7 +91,7 @@ public:
 	float lastTick;
 	bool explores;
 	bool wandersAround;
-
+	bool levelsUp;
 	char name[32];
 
 	Pos pos;
@@ -112,8 +112,10 @@ public:
 
 	int level;
 
-	float minExp;
-	float maxExp;
+	int minExp;
+	int maxExp;
+	int expToNextLevel;
+	int exp;
 
 	vector<Pos> lootsToCheck;
 
@@ -160,8 +162,8 @@ public:
 		return tickToManaRegen * 1000.0f / mpRegenMult;
 	}
 
-	float getExp() {
-		return ranf(minExp, maxExp);
+	int getExp() {
+		return rani(minExp, maxExp);
 	}
 	float getSight() {
 		return sight * sightMult / 1000.0f;
@@ -177,7 +179,7 @@ public:
 	int chanceToHit;
 	bool loots;
 	bool cantAttack;
-
+	float wanderMult;
 	int getWeaponDamage() {
 		return (weapon->getDamage()*damageMult) / 1000 + damageBoost;
 	}
@@ -197,7 +199,7 @@ public:
 	}
 
 	float getWanderTime() {
-		return ranf(20.0f, 60.0f);
+		return ranf(20.0f, 60.0f)*wanderMult;
 	}
 
 	bool evaded() {
@@ -217,8 +219,11 @@ public:
 		pixel.color = ran(256);
 		pixel.character = '?';
 		minExp = maxExp = 0;
+		expToNextLevel = 200;
+		exp = 0;
 		tickToRegen = 150.0f;
 		tickToManaRegen = 100.0f;
+		wanderMult = 1.0f;
 		explores = wandersAround = false;
 		consumes = false;
 		isDead = true;
@@ -235,7 +240,7 @@ public:
 		equipmentSlots[AMULET].resize(1);
 		equipmentSlots[CONSUMABLE].resize(100);
 		DR = 0;
-
+		levelsUp = false;
 		punchs = new Weapon();
 		punchs->slot = WEAPON;
 		punchs->minDamage = 2 + level;
@@ -465,13 +470,19 @@ public:
 				for (unsigned i = 0; i < droppedEquipments.size(); i++) {
 					if (droppedEquipments[i].p == pos) {
 						Equipment* old = NULL;
+						char p[128];
+						strcpy_s(p, droppedEquipments[i].e->name);
+						int slot = droppedEquipments[i].e->slot;
 						if (checkEquip(droppedEquipments[i].e, &old)) {
-							char buff[128];
+							char buff[256];
 							if (old) {
 								droppedNow.push_back(old);
-								sprintf_s(buff, "%s#%d drops %s and equips %s!", name, index, old->name, droppedEquipments[i].e->name);
+								sprintf_s(buff, "%s#%d drops %s and equips %s!", name, index, old->name, p);
 							} else {
-								sprintf_s(buff, "%s#%d equips %s!", droppedEquipments[i].e->name);
+								if(slot != CONSUMABLE)
+									sprintf_s(buff, "%s#%d equips %s!", p);
+								else
+									sprintf_s(buff, "%s#%d loots %s!", p);
 							}
 							pushMessage(buff);
 
@@ -515,7 +526,7 @@ public:
 		return false;
 	}
 
-	void doDamage(int damage) {
+	void doDamage(int damager, int damage) {
 		if (hp <= 0) {
 			return;
 		}
@@ -530,7 +541,49 @@ public:
 		}
 		if (hp <= 0) {
 			hp = 0;
+			for(unsigned i=0; i<creatures.size(); i++)
+			{
+				if(damager == creatures[i]->index)
+				{
+					creatures[i]->addExp(getExp());
+				}
+			}
 			die();
+		}
+	}
+
+	void addExp(int add)
+	{
+		if(!levelsUp) return;
+		exp += add;
+		while(exp >= expToNextLevel)
+		{
+			level++;
+			exp -= expToNextLevel;
+			expToNextLevel = (int)(1.2f*expToNextLevel);
+			expToNextLevel += 200;
+			hpMax += 5+ran(10);
+			mpMax += 5+ran(5);
+			if(level%3 == 0)
+			{
+				DR++;
+			}
+			if(level%2)
+			{
+				damageBoost += 2 + ran(3);
+			}
+
+			if(level%3)
+			{
+				chanceToHit -= 10;
+				attackSpeedMult += 5;
+				moveSpeedMult += 5;
+			}
+			hp=hpMax;
+			mp=mpMax;
+			char buff[256];
+			sprintf_s(buff, "%s#%d leveled to level %d!", name, index, level);
+			pushMessage(buff);
 		}
 	}
 
@@ -576,6 +629,12 @@ public:
 	}
 
 	void die() {
+		for (unsigned i = 0; i < skills.size(); i++) {
+			skills[i]->silent = true;
+		}
+		for (unsigned i = 0; i < buffs.size(); i++) {
+			buffs[i]->setSilent();
+		}
 		for (unsigned i = 0; i < equipmentSlots.size(); i++) {
 			for (unsigned j = 0; j < equipmentSlots[i].size(); j++) {
 				if (equipmentSlots[i][j] != punchs && equipmentSlots[i][j] != NULL && ran(1) == 0) {
@@ -585,12 +644,13 @@ public:
 				}
 			}
 		}
-		if (ran(5) == 0) {
+		if (ran(3) == 0) 
+		{
 			dropEquipment(getConsumable(level));
 		}
 		isDead = true;
 		maze.walls[pos.x][pos.y] = 0;
-		char buff[128];
+		char buff[256];
 		sprintf_s(buff, "%s#%d dies!", name, index);
 		pushMessage(buff);
 	}
@@ -673,7 +733,7 @@ public:
 			if (itemToConsume != -1) {
 				Consumable* consumable = ((Consumable*)equipmentSlots[CONSUMABLE][itemToConsume]);
 
-				char buff[128];
+				char buff[256];
 				if (consumable->consumeType == POTION) {
 					sprintf_s(buff, "%s#%d quaffs a %s.", name, index, consumable->name);
 				} else 	if (consumable->consumeType == SCROLL) {
@@ -829,17 +889,17 @@ public:
 
 			if (!creaturesToAttack[attackIndex]->evaded()) {
 				int damage = getWeaponDamage();
-				char buff[128];
+				char buff[256];
 				sprintf_s(buff, "%s#%d attacks %s#%d with its %s for %d damage!", name, index, creaturesToAttack[attackIndex]->name, creaturesToAttack[attackIndex]->index, weapon->name, damage);
 				pushMessage(buff);
 
 				for (unsigned i = 0; i < attackListeners.size(); i++) {
 					attackListeners[i]->attacked(this, creaturesToAttack[attackIndex], damage);
 				}
-				creaturesToAttack[attackIndex]->doDamage(damage);
+				creaturesToAttack[attackIndex]->doDamage(index, damage);
 
 			} else {
-				char buff[128];
+				char buff[256];
 				sprintf_s(buff, "%s#%d attacks %s#%d  but misses.", name, index, creaturesToAttack[attackIndex]->name, creaturesToAttack[attackIndex]->index);
 				pushMessage(buff);
 			}
@@ -957,6 +1017,7 @@ public:
 		}
 		return false;
 	}
+
 	bool deequip(Equipment *&equipment) {
 		if (equipment == NULL) return false;
 		if (equipment->buffGroup) {

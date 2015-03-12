@@ -86,7 +86,7 @@ bool generateCreatureGroup(Pos pos, vector<Creature*> &group, int level, int typ
 			bool modified = ran(2 - level / 2) == 0;
 			int modif = -1;
 			if (modified) modif = ran(4);
-			Creature *c = generateCreature(p, level + modified ? 1 : 0, modif, type);
+			Creature *c = generateCreature(p, level + (modified ? 1 : 0), modif, type);
 			if (c) {
 				if (modified && masterIndex == -1) masterIndex = c->index;
 				ret = true;

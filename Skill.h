@@ -12,10 +12,16 @@ public:
 	bool ended;
 	bool showText;
 	float tickToDie;
+	bool silent;
 	Buff() {
+		silent = false;
 		ended = true;
 		showText = false;
 		buffIndex = nextBuffIndex++;
+	}
+	virtual void setSilent()
+	{
+		silent = true;
 	}
 	virtual void start(Creature* creature) = 0;
 	virtual void end(Creature* creature) = 0;
@@ -243,7 +249,7 @@ public:
 	void tick(Creature* creature) {}
 
 	int goodness(Creature* creature) {
-		return (int)((buff > 100 ? 1 : 0) + (buff < 100 ? -1 : 0) + (buff - 100) * 1.1f);
+		return (int)((buff > 100 ? 1 : 0) + (buff < 100 ? -1 : 0) + (buff - 100) * 0.5f);
 	}
 };
 
@@ -454,6 +460,15 @@ public:
 	BuffGroup() : Buff() {
 		name[0] = '\0';
 	}
+
+	virtual void setSilent() override
+	{
+		silent = true;
+		for (unsigned i = 0; i < buffs.size(); i++) {
+			buffs[i]->setSilent();
+		}
+	}
+
 	virtual ~BuffGroup() {
 		for (unsigned i = 0; i < buffs.size(); i++) {
 			delete buffs[i];
@@ -554,9 +569,11 @@ public:
 	float dotTick;
 	float timeToNextDamage;
 	int dotDamage;
+	int damager;
 
-	DamageOverTime() : Buff() {
+	DamageOverTime(int damager) : Buff() {
 		strcpy_s(name, "");
+		this->damager = damager;
 	}
 
 	void improve() {
@@ -663,7 +680,7 @@ public:
 	float timeToNextCast;
 	float globalSpellDelay;
 	float delayToNextCast;
-	bool print;
+	bool silent;
 
 	Skill();
 	virtual int shouldCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove) = 0;

@@ -1,15 +1,17 @@
 #include "Tools.h"
+#include "Maze.h"
 #include "Skill.h"
 
 unordered_map<int, float> moveWeights;
 unordered_map<int, float> addWeights;
 unordered_map<int, float> seeWeights;
 
-
 char buffNamers[BUFF_CNT][32];
 char firstBuffNamers[BUFF_CNT][32];
 int eqipmentIcons[EQ_MAX];
 char eqipmentNames[EQ_MAX][32];
+
+extern Maze maze;
 
 int ran(int n) {
 	if (n <= 1) return 0;
@@ -59,6 +61,7 @@ void initTools() {
 	eqipmentIcons[BOOTS] = ACS_LLCORNER;
 	eqipmentIcons[RING] = 240;
 	eqipmentIcons[AMULET] = 164;
+	eqipmentIcons[CONSUMABLE] = ';';
 
 	strcpy_s(eqipmentNames[WEAPON], "WPN");
 	strcpy_s(eqipmentNames[ARMOR], "ARMR");
@@ -68,6 +71,7 @@ void initTools() {
 	strcpy_s(eqipmentNames[BOOTS], "GRVS");
 	strcpy_s(eqipmentNames[RING], "RING");
 	strcpy_s(eqipmentNames[AMULET], "AMUL");
+	strcpy_s(eqipmentNames[CONSUMABLE], "CONS");
 
 	for (int i = 0; i < BUFF_CNT; i++) {
 		strcpy_s(buffNamers[i], "%s");
@@ -191,11 +195,30 @@ int getColorIndex(int r, int g, int b) {
 }
 
 void pushMessage(char *str) {
-	messagePos++;
-	if (messagePos >= MAX_MESSAGE) {
-		messagePos -= MAX_MESSAGE;
+	while(str)
+	{
+		
+		int i = -1;
+		int len = strlen(str);
+		if(len > maze.window->windowSize.y-3)
+		{
+			i = maze.window->windowSize.y-3;
+			while(str[i] != ' ' && str[i] != 0 && i>= 0)
+				i--;
+		}
+		if(i==0) break;
+		messagePos++;
+		if (messagePos >= MAX_MESSAGE) {
+			messagePos -= MAX_MESSAGE;
+		}
+		if(i == -1)
+			strcpy_s(messages[messagePos], str);
+		else
+			strncpy_s(messages[messagePos], str, i);
+
+		if(i == -1) break;
+		else str = str + i+1;
 	}
-	strcpy_s(messages[messagePos], str);
 }
 
 void msleep(int sleepMS) {

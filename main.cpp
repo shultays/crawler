@@ -31,7 +31,8 @@ vector<DroppedEquipment> droppedEquipments;
 Pos cursor;
 GameWindow<MAZE_W, MAZE_H> mazeWindow;
 int globalVisible[MAZE_W][MAZE_H];
-
+int gIndex = 0;
+float lastGChangeTick = -1;
 void resetGame(bool keepAdventurer = false) {
 	if (!keepAdventurer) {
 		globalTick = realTick = 0.0f;
@@ -41,7 +42,7 @@ void resetGame(bool keepAdventurer = false) {
 	printw("%u ran\n", seed);
 	srand(seed);
 	memset(globalVisible, 0, sizeof(globalVisible));
-
+	maze.window = &mazeWindow;
 	maze.genRand(3);
 	messagePos = 0;
 	for (int i = 0; i < MAX_MESSAGE; i++) {
@@ -72,12 +73,12 @@ void resetGame(bool keepAdventurer = false) {
 		adventurer->hpMax = adventurer->hp = 300;
 		adventurer->mpMax = adventurer->mp = 100;
 		adventurer->level = 1;
-		adventurer->DR = 1;
+		adventurer->DR = 2;
 		adventurer->loots = true;
 		adventurer->consumes = true;
 		strcpy_s(adventurer->name, "Adventurer");
 		adventurer->tickToRegen = 100.0f;
-
+		adventurer->levelsUp = true;
 		adventurer->reset(Pos(-1, -1));
 
 		adventurer->equip(getWeapon(5));
@@ -246,10 +247,21 @@ void gameRefresh() {
 	for (unsigned i = 0; i < creatures.size(); i++) {
 		mazeWindow.data[creatures[i]->pos.x][creatures[i]->pos.y] = creatures[i]->pixel;
 	}
+	bool isEnded = creatures.size() == 0 || creatures[0]->type != ADVENTURER;
+	
 
 	Creature *creatureToShow = NULL;
 	if (tickGame) {
-		creatureToShow = creatures[0];
+		if(!isEnded){
+			creatureToShow = creatures[0];
+		}else{
+			if(gIndex == -1 || gIndex >= creatures.size() || lastGChangeTick < realTick - 2000)
+			{
+				gIndex = ran(creatures.size());
+				lastGChangeTick = realTick;
+			}
+			creatureToShow = creatures[gIndex];
+		}
 	} else {
 		for (unsigned i = 0; i < creatures.size(); i++) {
 			if (creatures[i]->pos == cursor) {
@@ -290,7 +302,11 @@ void gameRefresh() {
 			attrset(COLOR_PAIR(getColorIndex(0, 0, 7)));
 			mvprintw(x++, y, "MP : %d / %d", creatureToShow->mp, creatureToShow->mpMax);
 		}
-		if (creatureToShow->type > 100) {
+
+		if (creatureToShow->levelsUp) {
+			attrset(COLOR_PAIR(getColorIndex(7, 7, 0)));
+			mvprintw(x++, y, "EXP : %d / %d", creatureToShow->exp, creatureToShow->expToNextLevel);
+		}else{
 			attrset(COLOR_PAIR(getColorIndex(7, 7, 0)));
 			mvprintw(x++, y, "EXP : %d - %d", (int)creatureToShow->minExp, (int)creatureToShow->maxExp);
 		}
@@ -371,18 +387,15 @@ void gameRefresh() {
 		}
 	}
 
-
-
-
 	mazeWindow.render();
 
-
-	if (creatures.size() == 0 || creatures[0]->type != ADVENTURER) {
-		char *text = "The Adventurer is dead!";
+	if (isEnded) {
+		char *text =  "The Adventurer is dead!";
+		char *text2 = " Hit space to restart";
 		int l = strlen(text);
 		int x = mazeWindow.windowPos.x + mazeWindow.windowSize.x / 2;
 		int y = mazeWindow.windowPos.y + mazeWindow.windowSize.y / 2 - l / 2;
-		for (int i = x - 1; i <= x + 1; i++) {
+		for (int i = x - 1; i <= x + 2; i++) {
 			for (int j = y - 1; j < y + l + 1; j++) {
 				mvaddch(i, j, ' ');
 			}
@@ -390,14 +403,17 @@ void gameRefresh() {
 
 		attrset(COLOR_PAIR(getColorIndex(7, 7, 7)));
 		mvprintw(x, y, text);
+		mvprintw(x+1, y, text2);
 	}
 
 	attrset(COLOR_PAIR(255));
 
 	int j = messagePos;
 	int i = 0;
+
 	do {
-		mvprintw(mazeWindow.windowPos.x + mazeWindow.windowSize.x + i, 2, "%s", messages[j]);
+
+		mvprintw(row - i -2 , 2, "%s", messages[j]);
 		j--;
 		i++;
 		if (j < 0) {
@@ -442,6 +458,11 @@ int WINAPI  WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
 	resize_term(45, 120);
 
+	int row, col;
+	getmaxyx(stdscr, row, col);
+	mazeWindow.windowSize.x = row - 15;
+	mazeWindow.windowSize.y = col - 45;
+
 	resetGame();
 
 	for (int r = 0; r < 8; r++) {
@@ -461,7 +482,6 @@ int WINAPI  WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
 	mazeWindow.windowPos.x = 1;
 	mazeWindow.windowPos.y = 2;
-
 
 
 	//scrollok(win, false);

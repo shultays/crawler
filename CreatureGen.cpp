@@ -31,12 +31,12 @@ void addBuff(Equipment* e, vector<int>& weights, int level, int maxBuffCount, in
 			post = -1;
 		}
 		if (post != -1) {
-			char buff[128];
+			char buff[256];
 			sprintf_s(buff, buffNamers[post], e->name);
 			strcpy_s(e->name, buff);
 		}
 		if (pre != -1) {
-			char buff[128];
+			char buff[256];
 			sprintf_s(buff, firstBuffNamers[pre], e->name);
 			strcpy_s(e->name, buff);
 		}
@@ -762,13 +762,11 @@ Consumable* getConsumable(int level, int force) {
 	int rangeMax = 4;
 
 	bool no_item;
-	if (level < 3) {
-		no_item = true;
-	} else if (level <= 6) {
-		no_item = ran(5 - level + 1) != 0;
-	} else {
-		no_item = false;
-	}
+	
+
+	no_item = ran(level + 2) != 0;
+	
+
 
 	if (force != -1) no_item = false;
 
@@ -855,8 +853,8 @@ Creature* generateGoblin(int level, Pos pos) {
 	c->hpMax = 20 + level * 10 + ran(4) * 5;
 	c->hp = c->hpMax;
 	c->mp = 0;
-	c->minExp = 30.0f + level*10.0f;
-	c->maxExp = c->minExp*1.2f;
+	c->minExp = 30 + level*10;
+	c->maxExp = (int)(c->minExp*1.2f);
 	c->sight = 6.0f;
 	c->movePerTick = 6.0f;
 	c->explores = false;
@@ -868,8 +866,8 @@ Creature* generateGoblin(int level, Pos pos) {
 	c->tickToRegen = 100.0f;
 	c->pos = pos;
 
-	if (ran(2) == 0)c->equip(getWeapon(level + 5));
-	if (ran(3) == 0)c->equip(getArmor(level + 4));
+	if (ran(2) == 0)c->equip(getWeapon(level));
+	if (ran(3) == 0)c->equip(getArmor(level));
 	if (ran(5) == 0)c->equip(getHelm(level - 1));
 	if (ran(10) == 0)c->equip(getRing(level - 2));
 	if (ran(5) == 0)c->equip(getShield(level - 1));

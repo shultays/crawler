@@ -13,31 +13,57 @@ unsigned seed;
 float globalTick = 0;
 float realTick = 0;
 WINDOW * win;
-
+float lastAPUpdateTick = 0.0f;
 Maze maze;
 bool tickGame;
 bool gotoNextLevel = false;
 
 int currentLevel = 1;
+int scrollVal = 0;
+int maxScroll = 0;
+Pos scrolledPos = Pos(-1, -1);;
 
 int nextCreatureIndex = 0;
-
+int skillFocus = 0, maxFocus = 0;
+int focusedItem = -1, focusedSkill = -1;
 int messagePos;
 char messages[MAX_MESSAGE][128];
 
 vector<Creature*> creatures;
 vector<DroppedEquipment> droppedEquipments;
 
+int actionPoint = 100;
+
 Pos cursor;
 GameWindow<MAZE_W, MAZE_H> mazeWindow;
 int globalVisible[MAZE_W][MAZE_H];
 int gIndex = 0;
 float lastGChangeTick = -1;
+
+
+int createSingeCreatureP = 20;
+int createCreatureGroupP = 40;
+int takeControlP = 40;
+
+
+enum {
+	MENU_MAIN,
+	MENU_CONTROL_CREATURE,
+	MENU_SINGLE_MOVE,
+	MENU_USE_SKILL
+};
+
+Creature *creatureToControl, *creatureToShow;
+
+int menu = MENU_MAIN;
+
 void resetGame(bool keepAdventurer = false) {
 	if (!keepAdventurer) {
 		globalTick = realTick = 0.0f;
 		currentLevel = 1;
 	}
+	actionPoint += 50;
+	lastAPUpdateTick = globalTick;
 	seed = (unsigned)time(0);
 	printw("%u ran\n", seed);
 	srand(seed);
@@ -84,11 +110,11 @@ void resetGame(bool keepAdventurer = false) {
 		adventurer->equip(getWeapon(5));
 		adventurer->equip(getArmor(4, true));
 		adventurer->equip(getHelm(2));
-		adventurer->equip(getShield(1));
+		adventurer->equip(getShield(5));
 		adventurer->equip(getBoots(1));
 		adventurer->equip(getGloves(1));
-		adventurer->equip(getRing(1));
-		adventurer->equip(getRing(1));
+		adventurer->equip(getRing(5));
+		adventurer->equip(getRing(5));
 		adventurer->equip(getAmulet(1));
 
 		adventurer->equip(getConsumable(1, HEAL_POT));
@@ -135,7 +161,116 @@ bool control(int i) {
 	bool hasChange = false;
 	bool moved = false;
 	Pos newP;
+
+	if (i == 459) {
+		if (menu == MENU_USE_SKILL) {
+			menu = MENU_SINGLE_MOVE;
+		} else if (menu == MENU_SINGLE_MOVE) {
+			//menu = MENU_CONTROL_CREATURE;
+			menu = MENU_MAIN;
+			creatureToControl->controlAction = 0;
+			creatureToControl->beingControlled = FALSE;
+			creatureToControl->hasTarget = false;
+			creatureToControl = NULL;
+			cursor = creatures[0]->pos;
+
+		} else if (menu == MENU_CONTROL_CREATURE) {
+			menu = MENU_MAIN;
+			creatureToControl->controlAction = 0;
+			creatureToControl->beingControlled = FALSE;
+			creatureToControl->hasTarget = false;
+			creatureToControl = NULL;
+			cursor = creatures[0]->pos;
+		}
+
+	}
+
+	if (menu == MENU_USE_SKILL) {
+
+		if (i == '2' && skillFocus < maxFocus - 1) skillFocus++;
+		if (i == '8' && skillFocus > 0) skillFocus--;
+		if (i == '5') {
+			if (focusedSkill >= 0) {
+				creatureToControl->controlAction = CONTROL_USE_SKILL;
+				creatureToControl->controlUseSkillIndex = focusedSkill;
+			} else if (focusedItem >= 0) {
+				creatureToControl->controlAction = CONTROL_USE_CONSUMEABLE;
+				creatureToControl->controlUseItemIndex = focusedItem;
+			} else return true;
+			creatureToControl->controlActionDone = false;
+			creatureToControl->controlSkillPos = cursor;
+			tickGame = true;
+			menu = MENU_SINGLE_MOVE;
+		}
+	} else if (menu == MENU_SINGLE_MOVE && ((i >= '0' && i <= '9') || i == '+')) {
+		Pos p = creatureToControl->pos;
+
+		if (i == '0') {
+			menu = MENU_USE_SKILL;
+			skillFocus = 0;
+			maxFocus = 1;
+		} else if (i == '5') {
+			creatureToControl->controlAction = CONTROL_WAIT;
+			creatureToControl->controlActionDone = FALSE;
+			tickGame = true;
+		}
+
+		switch (i) {
+			case '1':
+				p = getPosForDir(p, DOWN_LEFT);
+				break;
+			case '2':
+				p = getPosForDir(p, DOWN);
+				break;
+			case '3':
+				p = getPosForDir(p, DOWN_RIGHT);
+				break;
+			case '4':
+				p = getPosForDir(p, LEFT);
+				break;
+			case '6':
+				p = getPosForDir(p, RIGHT);
+				break;
+			case '7':
+				p = getPosForDir(p, UP_LEFT);
+				break;
+			case '8':
+				p = getPosForDir(p, UP);
+				break;
+			case '9':
+				p = getPosForDir(p, UP_RIGHT);
+				break;
+		}
+
+		if (maze.walls[p.x][p.y] == 0) {
+			if (creatureToControl->tryToPath(p)) {
+				creatureToControl->controlAction = CONTROL_MOVE_TO_TARGET;
+				creatureToControl->controlActionDone = FALSE;
+				tickGame = true;
+			}
+		} else {
+			for (unsigned i = 0; i < creatures.size(); i++) {
+				if (creatures[i]->pos == p && creatureToControl->isEnemy(creatures[i]->type)) {
+					creatureToControl->lastAttackCreatureIndex = creatures[i]->index;
+					creatureToControl->controlAction = CONTROL_ATTACK_CREATURE;
+					creatureToControl->controlActionDone = FALSE;
+					tickGame = true;
+				}
+			}
+		}
+
+	}
+
 	switch (i) {
+		case 339:
+			if (scrollVal > 0)
+				scrollVal--;
+
+			break;
+		case 338:
+			if (scrollVal < maxScroll)
+				scrollVal++;
+			break;
 		case 27:
 			exit(0);
 			break;
@@ -148,33 +283,77 @@ bool control(int i) {
 
 			if (creatures.size() == 0 || creatures[0]->type != ADVENTURER) {
 				resetGame();
+				return true;
 			}
-			cursor = creatures[0]->pos;
-			hasChange = true;
+
+			if (creatureToControl) {
+				cursor = creatureToControl->pos;
+
+				creatureToControl->controlAction = 0;
+				creatureToControl->controlActionDone = false;
+			} else {
+				cursor = creatures[0]->pos;
+			}
+
 			break;
 
 		case '1':
 			if (!tickGame) {
-				Creature* c;
-				if (c = generateCreature(cursor, 1, ran(4))) {
-					c->reset(c->pos);
-					creatures.push_back(c);
+				if (menu == MENU_MAIN) {
+					if (actionPoint < createSingeCreatureP) break;
+					Creature* c;
+					if (c = generateCreature(cursor, 1, ran(4))) {
+						actionPoint -= createSingeCreatureP;
+						c->reset(c->pos);
+						creatures.push_back(c);
+					} else {
+						sprintf_s(buff, "Cannot create creatures in visible or blocked spots.");
+						pushMessage(buff);
+					}
+				} else if (menu == MENU_CONTROL_CREATURE) {
+					if (creatureToShow) {
+						menu = MENU_SINGLE_MOVE;
+					}
 				}
+
 			}
 			break;
 		case '2':
 			if (!tickGame) {
-				vector<Creature*> group;
-				if (generateCreatureGroup(cursor, group, currentLevel, GOBLIN)) {
-					for (unsigned i = 0; i < group.size(); i++) {
-						group[i]->reset(group[i]->pos);
-						creatures.push_back(group[i]);
+				if (menu == MENU_MAIN) {
+					if (actionPoint < createCreatureGroupP) break;
+					vector<Creature*> group;
+					if (generateCreatureGroup(cursor, group, currentLevel, GOBLIN)) {
+						actionPoint -= createCreatureGroupP;
+						for (unsigned i = 0; i < group.size(); i++) {
+							group[i]->reset(group[i]->pos);
+							creatures.push_back(group[i]);
+						}
+					} else {
+						sprintf_s(buff, "Cannot create creatures in visible or blocked spots.");
+						pushMessage(buff);
 					}
 				}
 			}
 			break;
 		case '3':
-			gotoNextLevel = true;
+			if (!tickGame) {
+				if (menu == MENU_MAIN) {
+					if (actionPoint < takeControlP) break;
+
+					if (creatureToShow) {
+						actionPoint -= takeControlP;
+						creatureToControl = creatureToShow;
+						creatureToControl->beingControlled = true;
+						creatureToControl->controlAction = CONTROL_WAIT;
+						creatureToControl->controlActionDone = true;
+						menu = MENU_SINGLE_MOVE;
+					} else {
+						sprintf_s(buff, "Move cursor on a creature to control it.");
+						pushMessage(buff);
+					}
+				}
+			}
 			break;
 		case KEY_UP:
 			newP = getPosForDir(cursor, UP);
@@ -204,12 +383,34 @@ bool control(int i) {
 	return hasChange;
 }
 
+void printEquipment(Creature *c, Equipment* e, int &x, int &y, bool addLast) {
+	attrset(COLOR_PAIR(getColorIndex(4, 4, 4)));
+	int count = 0;
+	if (e->slot == CONSUMABLE) {
+		count = ((Consumable*)e)->count;
+	}
+	if (count <= 1) {
+		mvprintw(x++, y, "(%d) %s", e->goodness(c), e->name);
+	} else {
+		mvprintw(x++, y, "(%d) %s x%d", e->goodness(c), e->name, count);
+	}
+	if (e->slot == WEAPON) {
+		Weapon *w = (Weapon*)e;
+		mvprintw(x++, y, "DMG : %d - %d", w->minDamage, w->maxDamage);
+		mvprintw(x++, y, "ATK SPD : %d", (int)w->swingTime);
+		mvprintw(x++, y, "RNG : %d", w->range);
+	}
+	attrset(COLOR_PAIR(getColorIndex(4, 4, 4)));
+
+	if (e->buffGroup) {
+		e->buffGroup->printStats(c, x, y);
+	}
+	if (e->slot != CONSUMABLE || addLast) x++;
+}
+
 void gameRefresh() {
 	erase();
-	attrset(COLOR_PAIR(255));
-	mvprintw(0, 2, "Tick : %d", (int)(globalTick));
-
-	mvprintw(0, 20, "Level : %d", currentLevel);
+	if (actionPoint > 100) actionPoint = 100;
 	int row, col;
 	getmaxyx(stdscr, row, col);
 	mazeWindow.windowSize.x = row - 15;
@@ -241,22 +442,22 @@ void gameRefresh() {
 	}
 
 	mazeWindow.data[creatures[0]->pos.x][creatures[0]->pos.y] = creatures[0]->pixel;
-	//mazeWindow.data[creatures[0]->moveTarget.x][creatures[0]->moveTarget.y].character = 'X';
-	//mazeWindow.data[creatures[0]->moveTarget.x][creatures[0]->moveTarget.y].color = getColorIndex(7, 0, 0);
+
 
 	for (unsigned i = 0; i < creatures.size(); i++) {
 		mazeWindow.data[creatures[i]->pos.x][creatures[i]->pos.y] = creatures[i]->pixel;
 	}
 	bool isEnded = creatures.size() == 0 || creatures[0]->type != ADVENTURER;
-	
 
-	Creature *creatureToShow = NULL;
+
+	creatureToShow = NULL;
 	if (tickGame) {
-		if(!isEnded){
+		if (creatureToControl) {
+			creatureToShow = creatureToControl;
+		} else if (!isEnded) {
 			creatureToShow = creatures[0];
-		}else{
-			if(gIndex == -1 || gIndex >= creatures.size() || lastGChangeTick < realTick - 2000)
-			{
+		} else {
+			if (gIndex == -1 || gIndex >= (int)creatures.size() || lastGChangeTick < realTick - 2000) {
 				gIndex = ran(creatures.size());
 				lastGChangeTick = realTick;
 			}
@@ -287,11 +488,18 @@ void gameRefresh() {
 		mazeWindow.data[maze.upstairs.x][maze.upstairs.y].character = '<';
 	}
 	mazeWindow.data[maze.downstairs.x][maze.downstairs.y].character = '>';
+	int initX;
+	int x = mazeWindow.windowPos.x;
+	int y = mazeWindow.windowPos.y + mazeWindow.windowSize.y + 1;
 
+	if (scrolledPos != cursor && !tickGame) {
+		scrolledPos = cursor;
+		scrollVal = 0;
+	}
+
+	x -= scrollVal;
+	initX = x;
 	if (creatureToShow) {
-		int x = mazeWindow.windowPos.x;
-		int y = mazeWindow.windowPos.y + mazeWindow.windowSize.y + 2;
-
 		attrset(COLOR_PAIR(creatureToShow->pixel.color));
 		mvprintw(x++, y, "LVL %d %s #%d", creatureToShow->level, creatureToShow->name, creatureToShow->index);
 		x++;
@@ -306,7 +514,7 @@ void gameRefresh() {
 		if (creatureToShow->levelsUp) {
 			attrset(COLOR_PAIR(getColorIndex(7, 7, 0)));
 			mvprintw(x++, y, "EXP : %d / %d", creatureToShow->exp, creatureToShow->expToNextLevel);
-		}else{
+		} else {
 			attrset(COLOR_PAIR(getColorIndex(7, 7, 0)));
 			mvprintw(x++, y, "EXP : %d - %d", (int)creatureToShow->minExp, (int)creatureToShow->maxExp);
 		}
@@ -328,55 +536,261 @@ void gameRefresh() {
 
 		x++;
 
-		mvprintw(x++, y, "Inventory", (int)creatureToShow->perMoveTick());
+		mvprintw(x++, y, "Inventory");
 		x++;
 
-		if (creatureToShow->weapon->type != 0) {
-			mvprintw(x++, y, "(%d) %s", creatureToShow->weapon->goodness(creatureToShow), creatureToShow->weapon->name);
-			mvprintw(x++, y, "DMG : %d - %d", creatureToShow->weapon->minDamage, creatureToShow->weapon->maxDamage);
-			mvprintw(x++, y, "ATK SPD : %d", (int)creatureToShow->weapon->swingTime);
-			mvprintw(x++, y, "RNG : %d", creatureToShow->weapon->range);
-			if (creatureToShow->weapon->buffGroup) {
-				creatureToShow->weapon->buffGroup->printStats(creatureToShow, x, y);
-			}
-			x++;
-		}
-
-		for (unsigned i = 1; i < creatureToShow->equipmentSlots.size(); i++) {
+		for (unsigned i = 0; i < creatureToShow->equipmentSlots.size(); i++) {
 			for (unsigned j = 0; j < creatureToShow->equipmentSlots[i].size(); j++) {
 				if (creatureToShow->equipmentSlots[i][j] != NULL) {
-					attrset(COLOR_PAIR(getColorIndex(4, 4, 4)));
-					int count = 0;
-					if (i == CONSUMABLE) {
-						count = ((Consumable*)creatureToShow->equipmentSlots[i][j])->count;
-					}
-					if (count <= 1) {
-						mvprintw(x++, y, "(%d) %s", creatureToShow->equipmentSlots[i][j]->goodness(creatureToShow), creatureToShow->equipmentSlots[i][j]->name);
-					} else {
-						mvprintw(x++, y, "(%d) %s x%d", creatureToShow->equipmentSlots[i][j]->goodness(creatureToShow), creatureToShow->equipmentSlots[i][j]->name, count);
-					}
-					if (creatureToShow->equipmentSlots[i][j]->buffGroup) {
-						creatureToShow->equipmentSlots[i][j]->buffGroup->printStats(creatureToShow, x, y);
-					}
-					if (i != CONSUMABLE) x++;
+					printEquipment(creatureToShow, creatureToShow->equipmentSlots[i][j], x, y, false);
 				}
 			}
 		}
 
-		x++;
 
 		for (unsigned i = 0; i < creatureToShow->buffs.size(); i++) {
 			creatureToShow->buffs[i]->printStats(creatureToShow, x, y);
 		}
 
+		x++;
 	}
+
+	bool printed = false;
+	for (unsigned i = 0; i < droppedEquipments.size(); i++) {
+		if (droppedEquipments[i].p == cursor) {
+			if (!printed) {
+				printed = true;
+				attrset(COLOR_PAIR(getColorIndex(4, 4, 4)));
+				mvprintw(x++, y, "Items on Ground");
+				x++;
+			}
+			printEquipment(creatures[0], droppedEquipments[i].e, x, y, true);
+		}
+	}
+
+	maxScroll = x - initX - mazeWindow.windowSize.x + 1;
+
+	attrset(COLOR_PAIR(getColorIndex(4, 4, 4)));
+	int m = mazeWindow.windowPos.x + mazeWindow.windowSize.x - 1;
+	int t = y;
+
+	for (int i = y; i < col; i++) {
+		mvaddch(0, i, ' ');
+	}
+
+	for (int i = y; i < col; i++) {
+		for (int j = m; j < row; j++) {
+			mvaddch(j, i, ' ');
+		}
+	}
+
+	attrset(COLOR_PAIR(getColorIndex(7, 7, 0)));
+
+	if (scrollVal > 0) {
+		mvaddch(m - 1, t, ACS_UARROW);
+		mvprintw(m - 1, t + 2, "PageUp");
+		t += 9;
+	}
+
+	if (scrollVal < maxScroll) {
+		mvaddch(m - 1, t, ACS_DARROW);
+		mvprintw(m - 1, t + 2, "PageDown");
+	}
+
+	x = m + 1;
+
+	attrset(COLOR_PAIR(getColorIndex(0, 7, 7)));
+	mvprintw(x++, y + 2, "Action Points (%d / %d)", actionPoint, 100);
+	int w = (col - 2) - (y + 1);
+	for (int i = y + 1; i < col - 2; i++) {
+		float k = actionPoint / 100.0f;
+		float l = ((float)i - y - 1) / w;
+		if (k < l) break;
+		mvaddch(x, i, '=');
+	}
+	mvaddch(x, y, '|');
+	mvaddch(x, col - 2, '|');
+	x += 1;
+
+	if (tickGame) {
+		x++;
+		mvprintw(x++, y, "Hit space to pause game and take action.", actionPoint, 100);
+	} else {
+		if (menu == MENU_MAIN) {
+			attrset(COLOR_PAIR(getColorIndex(7, 7, 7)));
+			mvaddch(x, y + 1, ACS_UARROW);
+			mvaddch(x + 1, y + 0, ACS_LARROW);
+			mvaddch(x + 1, y + 1, ACS_DARROW);
+			mvaddch(x + 1, y + 2, ACS_RARROW);
+
+			mvprintw(x + 1, y + 4, "Move cursor", actionPoint, 100);
+			x += 2;
+
+			attrset(COLOR_PAIR(actionPoint >= createSingeCreatureP ? getColorIndex(0, 7, 7) : getColorIndex(2, 2, 2)));
+			mvprintw(x++, y, "1 - Generate a single creature (AP %d)", createSingeCreatureP);
+			attrset(COLOR_PAIR(actionPoint >= createCreatureGroupP ? getColorIndex(0, 7, 7) : getColorIndex(2, 2, 2)));
+			mvprintw(x++, y, "2 - Generate a creature group (AP %d)", createCreatureGroupP);
+			attrset(COLOR_PAIR(actionPoint >= takeControlP ? getColorIndex(0, 7, 7) : getColorIndex(2, 2, 2)));
+			mvprintw(x++, y, "3 - Take control of a unit (AP %d)", takeControlP);
+		} else if (menu == MENU_CONTROL_CREATURE) {
+
+			attrset(COLOR_PAIR(getColorIndex(7, 7, 7)));
+			mvprintw(x++, y, "1 - Move a single cell");
+			x++;
+			mvprintw(x++, y, "Enter - Release Control");
+
+		} else if (menu == MENU_SINGLE_MOVE) {
+			attrset(COLOR_PAIR(getColorIndex(7, 7, 7)));
+			x++;
+			mvaddch(x, y + 1, ACS_UARROW);
+			mvaddch(x + 1, y + 0, ACS_LARROW);
+			mvaddch(x + 1, y + 1, ACS_DARROW);
+			mvaddch(x + 1, y + 2, ACS_RARROW);
+
+			mvprintw(x + 1, y + 4, "Move cursor", actionPoint, 100);
+			x += 3;
+
+			mvprintw(x + 0, y, "7 8 9 | 5 Wait a single turn");
+			mvprintw(x + 1, y, " \\|/  | 1-9 Move/Attack a cell");
+			mvprintw(x + 2, y, "4-5-6 | 0 Use a skill/item");
+			mvprintw(x + 3, y, " /|\\  |");
+			mvprintw(x + 4, y, "1 2 3 |");
+			x += 6;
+
+			mvprintw(x++, y, "Enter - Release Control");
+		} else if (menu == MENU_USE_SKILL) {
+			attrset(COLOR_PAIR(getColorIndex(7, 7, 7)));
+			x++;
+			mvaddch(x, y + 1, ACS_UARROW);
+			mvaddch(x + 1, y + 0, ACS_LARROW);
+			mvaddch(x + 1, y + 1, ACS_DARROW);
+			mvaddch(x + 1, y + 2, ACS_RARROW);
+
+			mvprintw(x + 1, y + 4, "Move cursor", actionPoint, 100);
+			x += 3;
+
+			int skillSkip = skillFocus - 5;
+			if (skillSkip < 0) skillSkip = 0;
+			int j = 0;
+			int focus = skillFocus;
+			focusedItem = focusedSkill = -1;
+			maxFocus = 0;
+			for (unsigned i = 0; i < creatureToControl->skills.size(); i++) {
+				Skill *s = creatureToControl->skills[i];
+				if (!focus) focusedSkill = i;
+
+				if (skillSkip > 0) {
+					skillSkip--;
+					focus--;
+					maxFocus++;
+				} else {
+					attrset(COLOR_PAIR(getColorIndex(7, 7, 7)));
+					if (!focus) mvprintw(x, y + 2, "> %s", s->name);
+					else mvprintw(x, y + 2, "%s", s->name);
+					int t = y + 2 + strlen(s->name) + 1 + (!focus ? 2 : 0);
+					focus--;
+					maxFocus++;
+					bool p = false;
+					if (s->requiresTarget()) {
+						attrset(COLOR_PAIR(getColorIndex(7, 7, 7)));
+						if (!p++) mvaddch(x, t++, '(');
+						else mvaddch(x, t++, ' ');
+
+						attrset(COLOR_PAIR(getColorIndex(7, 7, 0)));
+						mvaddch(x, t++, 'X');
+					}
+					if (s->manaCost) {
+						attrset(COLOR_PAIR(getColorIndex(7, 7, 7)));
+						if (!p++) mvaddch(x, t++, '(');
+						else mvaddch(x, t++, ' ');
+						attrset(COLOR_PAIR(getColorIndex(0, 0, 7)));
+						sprintf_s(buff, "%dmp", s->manaCost);
+						mvprintw(x, t, "%s", buff);
+						t += strlen(buff);
+					}
+					int cd = (int)max(s->timeToNextCast - globalTick, creatureToControl->timeToNextSkill);
+
+					if (cd > 0) {
+						attrset(COLOR_PAIR(getColorIndex(7, 7, 7)));
+						if (!p++) mvaddch(x, t++, '(');
+						else mvaddch(x, t++, ' ');
+						attrset(COLOR_PAIR(getColorIndex(0, 0, 7)));
+						sprintf_s(buff, "%dcd", cd);
+						mvprintw(x, t, "%s", buff);
+						t += strlen(buff);
+					}
+
+					attrset(COLOR_PAIR(getColorIndex(7, 7, 7)));
+					if (p) mvaddch(x, t++, ')');
+					x++;
+				}
+			}
+
+			for (unsigned i = 0; i < creatureToControl->equipmentSlots[CONSUMABLE].size(); i++) {
+				if (creatureToControl->equipmentSlots[CONSUMABLE][i]) {
+
+					if (!focus) focusedItem = i;
+					Skill *s = ((Consumable*)creatureToControl->equipmentSlots[CONSUMABLE][i])->skill;
+					if (skillSkip > 0) {
+						skillSkip--;
+						focus--;
+						maxFocus++;
+					} else {
+						if (!focus) mvprintw(x, y + 2, "> %s", creatureToControl->equipmentSlots[CONSUMABLE][i]->name);
+						else mvprintw(x, y + 2, "%s", creatureToControl->equipmentSlots[CONSUMABLE][i]->name);
+						int t = y + 2 + strlen(creatureToControl->equipmentSlots[CONSUMABLE][i]->name) + 1 + (!focus ? 2 : 0);
+						focus--;
+						maxFocus++;
+						bool p = false;
+						if (s->requiresTarget()) {
+							attrset(COLOR_PAIR(getColorIndex(7, 7, 7)));
+							if (!p++) mvaddch(x, t++, '(');
+							else mvaddch(x, t++, ' ');
+
+							attrset(COLOR_PAIR(getColorIndex(7, 7, 0)));
+							mvaddch(x, t++, 'X');
+						}
+
+
+						int cd = (int)(10.0f - (globalTick - creatureToControl->lastConsumeTick));
+
+						if (cd > 0) {
+							attrset(COLOR_PAIR(getColorIndex(7, 7, 7)));
+							if (!p++) mvaddch(x, t++, '(');
+							else mvaddch(x, t++, ' ');
+							attrset(COLOR_PAIR(getColorIndex(7, 0, 0)));
+							sprintf_s(buff, "%dcd", cd);
+							mvprintw(x, t, "%s", buff);
+							t += strlen(buff);
+						}
+
+						attrset(COLOR_PAIR(getColorIndex(7, 7, 7)));
+						if (p) mvaddch(x, t++, ')');
+						x++;
+					}
+
+				}
+			}
+			mvprintw(row - 1, y, "Enter - Previous Menu");
+		}
+
+	}
+
+
+	attrset(COLOR_PAIR(255));
+	mvprintw(0, 2, "Tick : %d", (int)(globalTick));
+
+	mvprintw(0, 20, "Level : %d", currentLevel);
 
 	for (unsigned i = 0; i < creatures.size(); i++) {
 		mazeWindow.data[creatures[i]->pos.x][creatures[i]->pos.y] = creatures[i]->pixel;
 	}
 
 	if (tickGame) {
-		mazeWindow.mapCenter = creatures[0]->pos;
+		if (creatureToControl)
+			mazeWindow.mapCenter = creatureToControl->pos;
+		else
+			mazeWindow.mapCenter = creatures[0]->pos;
 	} else {
 		mazeWindow.mapCenter = cursor;
 		int t = (int)(realTick / 200.0f);
@@ -390,7 +804,7 @@ void gameRefresh() {
 	mazeWindow.render();
 
 	if (isEnded) {
-		char *text =  "The Adventurer is dead!";
+		char *text = "The Adventurer is dead!";
 		char *text2 = " Hit space to restart";
 		int l = strlen(text);
 		int x = mazeWindow.windowPos.x + mazeWindow.windowSize.x / 2;
@@ -403,7 +817,7 @@ void gameRefresh() {
 
 		attrset(COLOR_PAIR(getColorIndex(7, 7, 7)));
 		mvprintw(x, y, text);
-		mvprintw(x+1, y, text2);
+		mvprintw(x + 1, y, text2);
 	}
 
 	attrset(COLOR_PAIR(255));
@@ -413,7 +827,7 @@ void gameRefresh() {
 
 	do {
 
-		mvprintw(row - i -2 , 2, "%s", messages[j]);
+		mvprintw(row - i - 2, 2, "%s", messages[j]);
 		j--;
 		i++;
 		if (j < 0) {
@@ -428,6 +842,13 @@ void gameRefresh() {
 
 bool tick() {
 	bool hasChange = false;
+
+	while (globalTick - lastAPUpdateTick> 200.0f) {
+		lastAPUpdateTick += 200.0f;
+		actionPoint++;
+		hasChange = true;
+	}
+
 	globalTick += 1.0f;
 	for (unsigned i = 0; i < creatures.size(); i++) {
 		if (creatures[i]->isDead) {
@@ -438,6 +859,14 @@ bool tick() {
 			continue;
 		}
 		hasChange |= creatures[i]->tick();
+	}
+	if (creatureToControl && creatureToControl->controlActionDone) {
+		int a = 5;
+	}
+	if (tickGame && creatureToControl != NULL && creatureToControl->controlActionDone) {
+		tickGame = false;
+		cursor = creatureToControl->pos;
+		creatureToControl->controlAction = 0;
 	}
 
 	return hasChange;
@@ -485,7 +914,6 @@ int WINAPI  WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
 
 	//scrollok(win, false);
-
 
 	while (true) {
 		int i;

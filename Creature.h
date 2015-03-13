@@ -241,6 +241,7 @@ public:
 		pixel.character = '?';
 		minExp = maxExp = 0;
 		expToNextLevel = 200;
+		controlAction = 0;
 		exp = 0;
 		tickToRegen = 150.0f;
 		tickToManaRegen = 100.0f;

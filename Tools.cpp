@@ -2,6 +2,8 @@
 #include "Maze.h"
 #include "Skill.h"
 
+char buff[512];
+
 unordered_map<int, float> moveWeights;
 unordered_map<int, float> addWeights;
 unordered_map<int, float> seeWeights;
@@ -195,29 +197,27 @@ int getColorIndex(int r, int g, int b) {
 }
 
 void pushMessage(char *str) {
-	while(str)
-	{
-		
+	while (str) {
+
 		int i = -1;
 		int len = strlen(str);
-		if(len > maze.window->windowSize.y-3)
-		{
-			i = maze.window->windowSize.y-3;
-			while(str[i] != ' ' && str[i] != 0 && i>= 0)
+		if (len > maze.window->windowSize.y - 3) {
+			i = maze.window->windowSize.y - 3;
+			while (str[i] != ' ' && str[i] != 0 && i >= 0)
 				i--;
 		}
-		if(i==0) break;
+		if (i == 0) break;
 		messagePos++;
 		if (messagePos >= MAX_MESSAGE) {
 			messagePos -= MAX_MESSAGE;
 		}
-		if(i == -1)
+		if (i == -1)
 			strcpy_s(messages[messagePos], str);
 		else
 			strncpy_s(messages[messagePos], str, i);
 
-		if(i == -1) break;
-		else str = str + i+1;
+		if (i == -1) break;
+		else str = str + i + 1;
 	}
 }
 

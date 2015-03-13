@@ -59,6 +59,8 @@ extern unordered_map<int, float> seeWeights;
 #define ROGUE 2
 #define PRIEST 3
 
+extern char buff[512];
+
 int ran(int n);
 float ranf(float a, float b);
 int rani(int a, int b);

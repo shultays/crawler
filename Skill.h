@@ -19,8 +19,7 @@ public:
 		showText = false;
 		buffIndex = nextBuffIndex++;
 	}
-	virtual void setSilent()
-	{
+	virtual void setSilent() {
 		silent = true;
 	}
 	virtual void start(Creature* creature) = 0;
@@ -461,8 +460,7 @@ public:
 		name[0] = '\0';
 	}
 
-	virtual void setSilent() override
-	{
+	virtual void setSilent() override {
 		silent = true;
 		for (unsigned i = 0; i < buffs.size(); i++) {
 			buffs[i]->setSilent();
@@ -681,10 +679,10 @@ public:
 	float globalSpellDelay;
 	float delayToNextCast;
 	bool silent;
-
 	Skill();
+	virtual bool requiresTarget() = 0;
 	virtual int shouldCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove) = 0;
-	virtual void doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove) = 0;
+	virtual void doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove, Pos p) = 0;
 };
 
 class BerserkSkill : public Skill {
@@ -696,8 +694,9 @@ public:
 		globalSpellDelay = 20.0f;
 	}
 
+	bool requiresTarget() { return false; }
 	int shouldCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove);
-	void doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove);
+	void doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove, Pos p);
 };
 
 class SingleTargetSkill : public Skill {
@@ -706,8 +705,9 @@ public:
 	SingleTargetSkill() : Skill() {
 
 	}
+	bool requiresTarget() { return true; }
 	int shouldCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove);
-	void doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove) = 0;
+	void doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove, Pos p) = 0;
 };
 
 class LightingSkill : public SingleTargetSkill {
@@ -722,7 +722,7 @@ public:
 		delayToNextCast = 20.0f;
 		globalSpellDelay = 20.0f;
 	}
-	void doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove);
+	void doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove, Pos p);
 };
 
 class FireBallSkill : public SingleTargetSkill {
@@ -737,7 +737,7 @@ public:
 		delayToNextCast = 20.0f;
 		globalSpellDelay = 20.0f;
 	}
-	void doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove);
+	void doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove, Pos p);
 };
 
 class IceBoltSkill : public SingleTargetSkill {
@@ -752,7 +752,7 @@ public:
 		delayToNextCast = 20.0f;
 		globalSpellDelay = 20.0f;
 	}
-	void doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove);
+	void doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove, Pos p);
 };
 
 class PoisonBladeSkill : public Skill {
@@ -765,8 +765,9 @@ public:
 		globalSpellDelay = 2.0f;
 		this->poisonDamage;
 	}
+	bool requiresTarget() { return false; }
 	int shouldCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove);
-	void doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove);
+	void doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove, Pos p);
 };
 
 class HealSkill : public Skill {
@@ -778,6 +779,7 @@ public:
 	int percentHeal;
 	bool canHealOther;
 
+	bool requiresTarget() { return canHealOther; }
 	HealSkill(int healMin = 20, int healMax = 40, int percentHeal = 10, bool canHealOther = true) : Skill() {
 		strcpy_s(name, "Heal");
 		manaCost = 20;
@@ -790,7 +792,7 @@ public:
 	}
 
 	int shouldCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove);
-	void doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove);
+	void doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove, Pos p);
 };
 
 class ManaSkill : public Skill {
@@ -801,9 +803,9 @@ public:
 		delayToNextCast = 500.0f;
 		globalSpellDelay = 10.0f;
 	}
-
+	bool requiresTarget() { return false; }
 	int shouldCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove);
-	void doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove);
+	void doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove, Pos p);
 };
 
 class RegenSkill : public Skill {
@@ -812,8 +814,9 @@ public:
 		strcpy_s(name, "Regen");
 	}
 
+	bool requiresTarget() { return false; }
 	int shouldCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove);
-	void doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove);
+	void doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove, Pos p);
 };
 
 
@@ -826,8 +829,9 @@ public:
 		globalSpellDelay = 10.0f;
 	}
 
+	bool requiresTarget() { return false; }
 	int shouldCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove);
-	void doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove);
+	void doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove, Pos p);
 };
 
 class EnchantSkill : public Skill {
@@ -842,8 +846,9 @@ public:
 			strcpy_s(name, "Enchant Armor");
 	}
 
+	bool requiresTarget() { return false; }
 	int shouldCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove);
-	void doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove);
+	void doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove, Pos p);
 };
 
 class SummonSkill : public Skill {
@@ -853,6 +858,7 @@ public:
 		this->type = type;
 	}
 
+	bool requiresTarget() { return false; }
 	int shouldCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove);
-	void doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove);
+	void doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove, Pos p);
 };

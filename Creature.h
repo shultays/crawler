@@ -20,6 +20,19 @@ extern vector<DroppedEquipment> droppedEquipments;
 #define IS_WALKED_ON 4
 #define HAS_NEW_ITEM 8
 
+enum {
+	CONTROL_MOVE_TO_TARGET = 1,
+	CONTROL_ATTACK_CREATURE,
+	CONTROL_USE_SKILL,
+	CONTROL_USE_CONSUMEABLE,
+	CONTROL_RUNAWAY,
+	CONTROL_APPROACH_TARGET,
+	CONTROL_LOOT,
+	CONTROL_EXPLORE,
+	CONTROL_WAIT,
+	CONTROL_WANDER
+};
+
 class Equipment {
 public:
 	int enchantCount;
@@ -31,7 +44,6 @@ public:
 	int type;
 	char name[128];
 	BuffGroup* buffGroup;
-
 	void addBuff(Buff* buff) {
 		if (buffGroup == NULL) buffGroup = new BuffGroup();
 		buffGroup->buffs.push_back(buff);
@@ -82,6 +94,13 @@ public:
 
 class Creature {
 public:
+	bool beingControlled;
+	bool controlActionDone;
+	int controlAction;
+	Pos controlSkillPos;
+	int controlUseItemIndex;
+	int controlUseSkillIndex;
+
 	int index;
 	int lastAttackCreatureIndex;
 
@@ -207,6 +226,8 @@ public:
 	}
 
 	Creature() {
+		beingControlled = false;
+		controlActionDone = false;
 		index = nextCreatureIndex++;
 		lastAttackCreatureIndex = -1;
 		masterIndex = -1;
@@ -303,8 +324,8 @@ public:
 		lastTick = globalTick;
 		lastRegenTick = globalTick;
 		lastManaRegenTick = globalTick;
-		timeToNextSkill = globalTick;
-		lastConsumeTick = globalTick;
+		timeToNextSkill = globalTick - 100;
+		lastConsumeTick = globalTick - 100;
 		isDead = false;
 		hasTarget = false;
 		tickToNextWander = globalTick + getWanderTime();
@@ -435,6 +456,7 @@ public:
 		if (isDead) {
 			return false;
 		}
+
 		while (globalTick - lastRegenTick > getTickToRegen()) {
 			lastRegenTick += getTickToRegen();
 			heal(hpMax / 20);
@@ -447,24 +469,63 @@ public:
 
 		master = NULL;
 		checkCreaturesAround();
-		checkSkills();
-		checkConsumables();
-		tickBuffs();
-		checkShouldRunAway();
 
-		if (wantsToRun) {
+		if (controlAction == 0) {
+			checkSkills();
+			checkConsumables();
+			checkShouldRunAway();
+		}
+		if (controlAction == CONTROL_USE_SKILL) {
+			if (timeToNextSkill <= globalTick) {
+				if (mp >= skills[controlUseSkillIndex]->manaCost && skills[controlUseSkillIndex]->timeToNextCast <= globalTick) {
+					skills[controlUseSkillIndex]->doCast(this, allies, enemies, creaturesToAttack, creaturesToMove, controlSkillPos);
+					controlActionDone = true;
+
+					mp -= skills[controlUseSkillIndex]->manaCost;
+					timeToNextSkill = globalTick + skills[controlUseSkillIndex]->globalSpellDelay;
+				}
+			}
+		}
+
+		if (controlAction == CONTROL_USE_CONSUMEABLE) {
+			if (lastConsumeTick + 10.0f <= globalTick) {
+				Consumable* consumable = ((Consumable*)equipmentSlots[CONSUMABLE][controlUseItemIndex]);
+				consumable->skill->doCast(this, allies, enemies, creaturesToAttack, creaturesToMove, controlSkillPos);
+				consumable->count--;
+				controlActionDone = true;
+
+				if (consumable->consumeType == POTION) {
+					sprintf_s(buff, "%s#%d quaffs a %s.", name, index, consumable->name);
+				} else 	if (consumable->consumeType == SCROLL) {
+					sprintf_s(buff, "%s#%d reads %s.", name, index, consumable->name);
+				} else 	if (consumable->consumeType == BOOK) {
+					sprintf_s(buff, "%s#%d read a page from %s.", name, index, consumable->name);
+				}
+
+				if (consumable->count == 0) {
+					delete consumable;
+					equipmentSlots[CONSUMABLE][controlUseItemIndex] = NULL;
+				}
+				lastConsumeTick = globalTick;
+			}
+		}
+
+		tickBuffs();
+
+
+		if (wantsToRun && controlAction == 0 || controlAction == CONTROL_RUNAWAY) {
 			if (tryToRun()) {
 				return true;
 			}
-		} else if (creaturesToAttack.size() > 0) {
+		} else if (creaturesToAttack.size() > 0 && controlAction == 0 || controlAction == CONTROL_ATTACK_CREATURE) {
 			if (tryToAttack()) {
 				return true;
 			}
-		} else	if (creaturesToMove.size() > 0) {
+		} else	if (creaturesToMove.size() > 0 && controlAction == 0 || controlAction == CONTROL_APPROACH_TARGET) {
 			if (tryToApproach()) {
 				return true;
 			}
-		} else if (lootsToCheck.size() > 0) {
+		} else if (lootsToCheck.size() > 0 && controlAction == 0 || controlAction == CONTROL_LOOT) {
 			if (pos == lootsToCheck.back()) {
 				vector<Equipment*> droppedNow;
 				for (unsigned i = 0; i < droppedEquipments.size(); i++) {
@@ -474,15 +535,15 @@ public:
 						strcpy_s(p, droppedEquipments[i].e->name);
 						int slot = droppedEquipments[i].e->slot;
 						if (checkEquip(droppedEquipments[i].e, &old)) {
-							char buff[256];
+
 							if (old) {
 								droppedNow.push_back(old);
 								sprintf_s(buff, "%s#%d drops %s and equips %s!", name, index, old->name, p);
 							} else {
-								if(slot != CONSUMABLE)
-									sprintf_s(buff, "%s#%d equips %s!", p);
+								if (slot != CONSUMABLE)
+									sprintf_s(buff, "%s#%d equips %s!", name, index, p);
 								else
-									sprintf_s(buff, "%s#%d loots %s!", p);
+									sprintf_s(buff, "%s#%d loots %s!", name, index, p);
 							}
 							pushMessage(buff);
 
@@ -502,16 +563,19 @@ public:
 				lootsToCheck.resize(lootsToCheck.size() - 1);
 				return true;
 			} else if (hasTarget == false || moveTarget != lootsToCheck.back()) {
-				hasTarget = true;
+
 				moveTarget = lootsToCheck.back();
-				findPath<MAZE_W, MAZE_H>(pos, moveTarget, maze.walls, addWeights, 100000.0f, targetPath);
+				tryToPath(moveTarget);
 				return true;
 			}
-		} else if (hp < hpMax / 3) {
+		} else if (hp < hpMax / 3 && controlAction == 0 || controlAction == CONTROL_WAIT) {
+			if (controlAction == CONTROL_WAIT) {
+				controlActionDone = true;
+			}
 			return false;
-		} else if (!hasTarget && explores) {
+		} else if (!hasTarget && explores && controlAction == 0 || controlAction == CONTROL_EXPLORE) {
 			findTarget();
-		} else if (wandersAround && tickToNextWander < globalTick &&  globalTick - lastTick >= perMoveTick()) {
+		} else if (wandersAround && tickToNextWander < globalTick &&  globalTick - lastTick >= perMoveTick() && (controlAction == 0 || controlAction == CONTROL_WANDER)) {
 			if (tryToWander()) {
 				return true;
 			}
@@ -541,10 +605,8 @@ public:
 		}
 		if (hp <= 0) {
 			hp = 0;
-			for(unsigned i=0; i<creatures.size(); i++)
-			{
-				if(damager == creatures[i]->index)
-				{
+			for (unsigned i = 0; i < creatures.size(); i++) {
+				if (damager == creatures[i]->index) {
 					creatures[i]->addExp(getExp());
 				}
 			}
@@ -552,36 +614,31 @@ public:
 		}
 	}
 
-	void addExp(int add)
-	{
-		if(!levelsUp) return;
+	void addExp(int add) {
+		if (!levelsUp) return;
 		exp += add;
-		while(exp >= expToNextLevel)
-		{
+		while (exp >= expToNextLevel) {
 			level++;
 			exp -= expToNextLevel;
 			expToNextLevel = (int)(1.2f*expToNextLevel);
 			expToNextLevel += 200;
-			hpMax += 5+ran(10);
-			mpMax += 5+ran(5);
-			if(level%3 == 0)
-			{
+			hpMax += 5 + ran(10);
+			mpMax += 5 + ran(5);
+			if (level % 3 == 0) {
 				DR++;
 			}
-			if(level%2)
-			{
+			if (level % 2) {
 				damageBoost += 2 + ran(3);
 			}
 
-			if(level%3)
-			{
+			if (level % 3) {
 				chanceToHit -= 10;
 				attackSpeedMult += 5;
 				moveSpeedMult += 5;
 			}
-			hp=hpMax;
-			mp=mpMax;
-			char buff[256];
+			hp = hpMax;
+			mp = mpMax;
+
 			sprintf_s(buff, "%s#%d leveled to level %d!", name, index, level);
 			pushMessage(buff);
 		}
@@ -644,13 +701,12 @@ public:
 				}
 			}
 		}
-		if (ran(3) == 0) 
-		{
+		if (ran(3) == 0) {
 			dropEquipment(getConsumable(level));
 		}
 		isDead = true;
 		maze.walls[pos.x][pos.y] = 0;
-		char buff[256];
+
 		sprintf_s(buff, "%s#%d dies!", name, index);
 		pushMessage(buff);
 	}
@@ -692,7 +748,7 @@ public:
 				if (creature == NULL) continue;
 				if (isEnemy(creature->type)) {
 					enemies.push_back(creature);
-					hasTarget = false;
+					if (controlAction == 0) hasTarget = false;
 
 					int dist_x = abs(p.x - pos.x);
 					int dist_y = abs(p.y - pos.y);
@@ -711,8 +767,8 @@ public:
 				}
 			}
 		}
-
 	}
+
 	void checkConsumables() {
 		if (!consumes) {
 			return;
@@ -733,7 +789,7 @@ public:
 			if (itemToConsume != -1) {
 				Consumable* consumable = ((Consumable*)equipmentSlots[CONSUMABLE][itemToConsume]);
 
-				char buff[256];
+
 				if (consumable->consumeType == POTION) {
 					sprintf_s(buff, "%s#%d quaffs a %s.", name, index, consumable->name);
 				} else 	if (consumable->consumeType == SCROLL) {
@@ -745,7 +801,7 @@ public:
 				pushMessage(buff);
 
 
-				consumable->skill->doCast(this, allies, enemies, creaturesToAttack, creaturesToMove);
+				consumable->skill->doCast(this, allies, enemies, creaturesToAttack, creaturesToMove, Pos(-1, -1));
 				consumable->count--;
 				if (consumable->count == 0) {
 					delete consumable;
@@ -770,7 +826,7 @@ public:
 			}
 			if (skillToCast != -1) {
 				mp -= skills[skillToCast]->manaCost;
-				skills[skillToCast]->doCast(this, allies, enemies, creaturesToAttack, creaturesToMove);
+				skills[skillToCast]->doCast(this, allies, enemies, creaturesToAttack, creaturesToMove, Pos(-1, -1));
 				timeToNextSkill = globalTick + skills[skillToCast]->globalSpellDelay;
 			}
 		}
@@ -778,7 +834,6 @@ public:
 	}
 
 	void tickBuffs() {
-
 		for (unsigned i = 0; i < buffs.size(); i++) {
 			buffs[i]->tick(this);
 			if (buffs[i]->ended == false && buffs[i]->tickToDie < globalTick) {
@@ -796,7 +851,6 @@ public:
 	}
 
 	void checkShouldRunAway() {
-
 		if (!fearless && timeToRunAgain < globalTick && enemies.size() >= 4 && !wantsToRun && hp < hpMax / 2) {
 
 			int currentNCount = -1;
@@ -886,10 +940,13 @@ public:
 				attackIndex = ran(creaturesToAttack.size());
 			}
 			lastAttackCreatureIndex = creaturesToAttack[attackIndex]->index;
-
+			if (controlAction == CONTROL_ATTACK_CREATURE) {
+				controlActionDone = true;
+				controlAction = 0;
+			}
 			if (!creaturesToAttack[attackIndex]->evaded()) {
 				int damage = getWeaponDamage();
-				char buff[256];
+
 				sprintf_s(buff, "%s#%d attacks %s#%d with its %s for %d damage!", name, index, creaturesToAttack[attackIndex]->name, creaturesToAttack[attackIndex]->index, weapon->name, damage);
 				pushMessage(buff);
 
@@ -899,7 +956,7 @@ public:
 				creaturesToAttack[attackIndex]->doDamage(index, damage);
 
 			} else {
-				char buff[256];
+
 				sprintf_s(buff, "%s#%d attacks %s#%d  but misses.", name, index, creaturesToAttack[attackIndex]->name, creaturesToAttack[attackIndex]->index);
 				pushMessage(buff);
 			}
@@ -997,6 +1054,17 @@ public:
 		return true;
 
 	}
+	bool tryToPath(Pos p) {
+		moveTarget = p;
+		hasTarget = false;
+		if (findPath<MAZE_W, MAZE_H>(pos, moveTarget, maze.walls, addWeights, 100000.0f, targetPath)) {
+			hasTarget = true;
+			pathVal = 0;
+			return true;
+		}
+		return false;
+	}
+
 
 	bool tryToGoTarget() {
 		if (hasTarget && globalTick - lastTick >= perMoveTick()) {
@@ -1006,12 +1074,17 @@ public:
 					hasTarget = false;
 					return true;
 				}
-
-				findTarget();
+				if (controlAction == CONTROL_MOVE_TO_TARGET) {
+					controlActionDone = true;
+				}
+				hasTarget = false;
 				return true;
 			}
 			lastTick = globalTick;
-			moveToPos(targetPath[pathVal]);
+			bool moved = moveToPos(targetPath[pathVal]);
+			if (!moved && controlAction == CONTROL_MOVE_TO_TARGET) {
+				controlActionDone = true;
+			}
 			pathVal++;
 			return true;
 		}

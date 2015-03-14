@@ -350,7 +350,7 @@ void printArt(int x, int y) {
 	mvprintw(x++, y, "                                             |___/        ");
 	mvprintw(x++, y, "                                      /|                      Engin Mercan");
 	mvprintw(x++, y, "                                     |\\|           mail<at>enginmercan.com");
-	mvprintw(x++, y, "                                     |||");
+	mvprintw(x++, y, "                                     |||                     for 7DRL 2015 ");
 	mvprintw(x++, y, "                                     |||");
 	mvprintw(x++, y, "                                     |||");
 	mvprintw(x++, y, "                                     |||");

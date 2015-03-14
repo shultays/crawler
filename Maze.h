@@ -170,7 +170,7 @@ public:
 	}
 
 	void fixSides() {
-		printw("fixSides..."); refresh();
+		//printw("fixSides..."); refresh();
 		for (int i = 0; i < MAZE_W; i++) {
 			walls[i][0] = 1;
 			walls[i][MAZE_H - 1] = 1;
@@ -181,10 +181,10 @@ public:
 			walls[MAZE_W - 1][j] = 1;
 		}
 
-		printw("  done\n"); refresh();
+		//printw("  done\n"); refresh();
 	}
 	void checkUnreached() {
-		printw("checkUnreached..."); refresh();
+		//printw("checkUnreached..."); refresh();
 		queue<Pos> queue;
 		bool reached[MAZE_W][MAZE_H];
 		memset(reached, false, sizeof(reached));
@@ -235,7 +235,7 @@ public:
 				}
 			}
 		}
-		printw(" done\n"); refresh();
+		//printw(" done\n"); refresh();
 	}
 
 	class CompareNode {
@@ -251,7 +251,7 @@ public:
 	};
 
 	void connectTwoRooms(int i, int j) {
-		printw("\tconnecting %d %d ...", i, j); refresh();
+		//printw("\tconnecting %d %d ...", i, j); refresh();
 		Pos startPos = Pos(roomPos[i].x, roomPos[i].y);
 
 		Pos foundPos;
@@ -268,11 +268,11 @@ public:
 			walls[pos.x][pos.y] = 0;
 		}
 
-		printw(" done\n"); refresh();
+		//printw(" done\n"); refresh();
 	}
 
 	void connectRooms() {
-		printw("connectRooms...\n"); refresh();
+		//printw("connectRooms...\n"); refresh();
 		for (int b = roomCount - 1; b > 0; b--) {
 			int a = ran(b);
 
@@ -287,11 +287,11 @@ public:
 		} while (b == a);
 		connectTwoRooms(a, b);
 		}*/
-		printw(" done\n"); refresh();
+		//printw(" done\n"); refresh();
 	}
 
 	void genRooms() {
-		printw("genRooms..."); refresh();
+		//printw("genRooms..."); refresh();
 		roomCount = 0;
 		for (int a = 0; a < MAZE_W / 3 * MAZE_H / 3 / 20 + 2; a++) {
 			int w = 3 + ran(5);
@@ -332,11 +332,11 @@ public:
 				}
 			}
 		}
-		printw(" done\n"); refresh();
+		//printw(" done\n"); refresh();
 	}
 
 	void genWalls() {
-		printw("genWalls..."); refresh();
+		//printw("genWalls..."); refresh();
 		for (int i = 0; i < MAZE_W / 3; i++) {
 			for (int j = 0; j < MAZE_H / 3; j++) {
 
@@ -451,11 +451,11 @@ public:
 				}
 			}
 		}
-		printw(" done\n"); refresh();
+		//printw(" done\n"); refresh();
 	}
 
 	void genPaths(int pathLen) {
-		printw("genPaths..."); refresh();
+		//printw("genPaths..."); refresh();
 		vector<Node> nodes;
 
 		vector<Pos> allPos;
@@ -602,7 +602,7 @@ public:
 			}*/
 		}
 
-		printw(" done\n"); refresh();
+		//printw(" done\n"); refresh();
 	}
 
 	void setWindow(GameWindow<MAZE_W, MAZE_H> *window) {

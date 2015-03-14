@@ -17,10 +17,11 @@ float lastAPUpdateTick = 0.0f;
 Maze maze;
 bool tickGame;
 bool gotoNextLevel = false;
-
+float controlEndTime = 350.0f;
 int currentLevel = 1;
 int scrollVal = 0;
 int maxScroll = 0;
+int messageScrollVal = 0;
 Pos scrolledPos = Pos(-1, -1);;
 
 int nextCreatureIndex = 0;
@@ -28,6 +29,7 @@ int skillFocus = 0, maxFocus = 0;
 int focusedItem = -1, focusedSkill = -1;
 int messagePos;
 char messages[MAX_MESSAGE][128];
+bool cheat = false;
 
 vector<Creature*> creatures;
 vector<DroppedEquipment> droppedEquipments;
@@ -41,9 +43,9 @@ int gIndex = 0;
 float lastGChangeTick = -1;
 
 
-int createSingeCreatureP = 20;
+int createSingeCreatureP = 30;
 int createCreatureGroupP = 40;
-int takeControlP = 40;
+int takeControlP = 10;
 
 
 enum {
@@ -58,6 +60,9 @@ Creature *creatureToControl, *creatureToShow;
 int menu = MENU_MAIN;
 
 void resetGame(bool keepAdventurer = false) {
+	printArt(2, 22);
+
+
 	if (!keepAdventurer) {
 		globalTick = realTick = 0.0f;
 		currentLevel = 1;
@@ -70,11 +75,6 @@ void resetGame(bool keepAdventurer = false) {
 	memset(globalVisible, 0, sizeof(globalVisible));
 	maze.window = &mazeWindow;
 	maze.genRand(3);
-	messagePos = 0;
-	for (int i = 0; i < MAX_MESSAGE; i++) {
-		messages[i][0] = '\0';
-	}
-
 	for (unsigned i = 0; i < droppedEquipments.size(); i++) {
 		delete droppedEquipments[i].e;
 	}
@@ -97,7 +97,7 @@ void resetGame(bool keepAdventurer = false) {
 		adventurer->movePerTick = 5.0f;
 		adventurer->sight = 5.0f;
 		adventurer->hpMax = adventurer->hp = 300;
-		adventurer->mpMax = adventurer->mp = 100;
+		adventurer->mpMax = adventurer->mp = 150;
 		adventurer->level = 1;
 		adventurer->DR = 2;
 		adventurer->loots = true;
@@ -105,12 +105,38 @@ void resetGame(bool keepAdventurer = false) {
 		strcpy_s(adventurer->name, "Adventurer");
 		adventurer->tickToRegen = 100.0f;
 		adventurer->levelsUp = true;
+		adventurer->skillToLearn.push_back(SkillTree(new BerserkSkill(), 1));
+		adventurer->skillToLearn.push_back(SkillTree(new StoneSkinSkill(), 3));
+		adventurer->skillToLearn.push_back(SkillTree(new HasteSkill(), 5));
+		char *spellName;
+		char *damageType;
+		int color;
+		int t = ran(3);
+		if (t == 0) {
+			spellName = "Ench. Weapon (Fire)";
+			damageType = "Fire";
+			color = getColorIndex(7, 0, 0);
+			adventurer->skillToLearn.push_back(SkillTree(new FireBallSkill(), 2));
+		} else if (t == 1) {
+			spellName = "Ench. Weapon (Ice)";
+			damageType = "Ice";
+			color = getColorIndex(0, 7, 7);
+			adventurer->skillToLearn.push_back(SkillTree(new IceBoltSkill(), 2));
+		} else {
+			spellName = "Ench. Weapon (Lighting)";
+			damageType = "Lighting";
+			color = getColorIndex(7, 7, 0);
+			adventurer->skillToLearn.push_back(SkillTree(new LightingSkill(), 2));
+		}
+
+		adventurer->skillToLearn.push_back(SkillTree(new ElementalWeaponSkill(spellName, damageType, color), 4));
+		adventurer->skillToLearn.push_back(SkillTree(new BlurSkill(), 7));
 		adventurer->reset(Pos(-1, -1));
 
-		adventurer->equip(getWeapon(5));
+		adventurer->equip(getWeapon(5, true));
 		adventurer->equip(getArmor(4, true));
-		adventurer->equip(getHelm(2));
-		adventurer->equip(getShield(5));
+		adventurer->equip(getHelm(2, true));
+		adventurer->equip(getShield(2));
 		adventurer->equip(getBoots(1));
 		adventurer->equip(getGloves(1));
 		adventurer->equip(getRing(5));
@@ -126,7 +152,7 @@ void resetGame(bool keepAdventurer = false) {
 		adventurer->equip(getConsumable(1, CHARM_SCROLL));
 		adventurer->equip(getConsumable(1, BUTTERFLY_SCROLL));
 		adventurer->equip(getConsumable(1, LIGHTING_SCROLL + ran(2)));
-		adventurer->skills.push_back(new BerserkSkill());
+
 		creatures.push_back(adventurer);
 	}
 
@@ -134,7 +160,17 @@ void resetGame(bool keepAdventurer = false) {
 	creatures[0]->resetPos(maze.upstairs);
 
 
-	pushMessage("Wild Adventurer appeared!");
+	if (!keepAdventurer) {
+		messagePos = 0;
+		for (int i = 0; i < MAX_MESSAGE; i++) {
+			messages[i][0] = '\0';
+		}
+		messageCount = 0;
+		pushMessage("Wild Adventurer appeared!");
+	} else {
+		sprintf_s(buff, "Adventurer is now on floor %d\n", currentLevel);
+		pushMessage(buff);
+	}
 
 	for (int i = 0; i < 8; i++) {
 		int t = 10;
@@ -157,12 +193,73 @@ void resetGame(bool keepAdventurer = false) {
 	tickGame = false;
 }
 
+char *cheatText = "cheat", *c = cheatText;
+
 bool control(int i) {
 	bool hasChange = false;
 	bool moved = false;
 	Pos newP;
 
-	if (i == 459) {
+	if (*c == i) {
+		c++;
+		if (*c == 0) {
+			cheat = !cheat;
+			if (cheat) {
+				sprintf_s(buff, "Cheats are enabled.");
+				pushMessage(buff);
+				sprintf_s(buff, "Adventurer can't die.");
+				pushMessage(buff);
+				sprintf_s(buff, "Creatures loot items / use consumables.");
+				pushMessage(buff);
+				sprintf_s(buff, "F1-F8 to generate weapon.");
+				pushMessage(buff);
+				sprintf_s(buff, "Q to go next level.");
+				pushMessage(buff);
+			} else {
+				sprintf_s(buff, "Cheats are disabled.");
+				pushMessage(buff);
+			}
+			c = cheatText;
+		}
+	} else {
+		c = cheatText;
+	}
+
+	if (cheat) {
+		if (i == 'q') gotoNextLevel = true;
+
+		Equipment* e = NULL;
+
+		if (i == KEY_F(1)) e = getWeapon(currentLevel + 3, true);
+		if (i == KEY_F(2)) e = getArmor(currentLevel + 3, true);
+		if (i == KEY_F(3)) e = getHelm(currentLevel + 3, true);
+		if (i == KEY_F(4)) e = getShield(currentLevel + 3, true);
+		if (i == KEY_F(5)) e = getBoots(currentLevel + 3, true);
+		if (i == KEY_F(6)) e = getGloves(currentLevel + 3, true);
+		if (i == KEY_F(7)) e = getAmulet(currentLevel + 3, true);
+		if (i == KEY_F(8)) e = getConsumable(currentLevel + 3, -1, true);
+
+		if (e != NULL) {
+			for (unsigned i = 0; i < creatures.size(); i++) {
+				creatures[i]->mazeState[cursor.x][cursor.y] |= HAS_NEW_ITEM;
+			}
+			DroppedEquipment eq;
+			eq.e = e;
+			eq.p = cursor;
+			droppedEquipments.push_back(eq);
+		}
+	}
+
+
+	if (i == '-') {
+		if (messageScrollVal < messageCount - 12) messageScrollVal++;
+		return true;
+	} else if (i == '+') {
+		if (messageScrollVal > 0) messageScrollVal--;
+		return true;
+	}
+
+	if (i == 459 || i == 10) {
 		if (menu == MENU_USE_SKILL) {
 			menu = MENU_SINGLE_MOVE;
 		} else if (menu == MENU_SINGLE_MOVE) {
@@ -186,10 +283,16 @@ bool control(int i) {
 	}
 
 	if (menu == MENU_USE_SKILL) {
-
 		if (i == '2' && skillFocus < maxFocus - 1) skillFocus++;
 		if (i == '8' && skillFocus > 0) skillFocus--;
 		if (i == '5') {
+			if (dist(cursor, creatureToControl->pos) > creatureToControl->getSight()) {
+
+				sprintf_s(buff, "That cell is outside the range.");
+				pushMessage(buff);
+				return true;
+			}
+
 			if (focusedSkill >= 0) {
 				creatureToControl->controlAction = CONTROL_USE_SKILL;
 				creatureToControl->controlUseSkillIndex = focusedSkill;
@@ -300,10 +403,10 @@ bool control(int i) {
 		case '1':
 			if (!tickGame) {
 				if (menu == MENU_MAIN) {
-					if (actionPoint < createSingeCreatureP) break;
+					if (actionPoint < createSingeCreatureP && !cheat) break;
 					Creature* c;
-					if (c = generateCreature(cursor, 1, ran(4))) {
-						actionPoint -= createSingeCreatureP;
+					if (c = generateCreature(cursor, currentLevel + 1, ran(4))) {
+						if (!cheat)actionPoint -= createSingeCreatureP;
 						c->reset(c->pos);
 						creatures.push_back(c);
 					} else {
@@ -321,10 +424,10 @@ bool control(int i) {
 		case '2':
 			if (!tickGame) {
 				if (menu == MENU_MAIN) {
-					if (actionPoint < createCreatureGroupP) break;
+					if (actionPoint < createCreatureGroupP && !cheat) break;
 					vector<Creature*> group;
 					if (generateCreatureGroup(cursor, group, currentLevel, GOBLIN)) {
-						actionPoint -= createCreatureGroupP;
+						if (!cheat)actionPoint -= createCreatureGroupP;
 						for (unsigned i = 0; i < group.size(); i++) {
 							group[i]->reset(group[i]->pos);
 							creatures.push_back(group[i]);
@@ -339,10 +442,19 @@ bool control(int i) {
 		case '3':
 			if (!tickGame) {
 				if (menu == MENU_MAIN) {
-					if (actionPoint < takeControlP) break;
+					if (actionPoint < takeControlP && !cheat) break;
 
 					if (creatureToShow) {
-						actionPoint -= takeControlP;
+						if (creatureToShow->type == ADVENTURER || creatureToControl->type == ADVENTURER_ALLY) {
+							if (!cheat) {
+								sprintf_s(buff, "Can't take control of Adventurer of its allies.");
+								pushMessage(buff);
+								return true;
+							}
+						}
+
+						if (!cheat)actionPoint -= takeControlP;
+						controlEndTime = globalTick + 300.0f;
 						creatureToControl = creatureToShow;
 						creatureToControl->beingControlled = true;
 						creatureToControl->controlAction = CONTROL_WAIT;
@@ -389,10 +501,14 @@ void printEquipment(Creature *c, Equipment* e, int &x, int &y, bool addLast) {
 	if (e->slot == CONSUMABLE) {
 		count = ((Consumable*)e)->count;
 	}
+	int ench = e->enchantCount;
 	if (count <= 1) {
-		mvprintw(x++, y, "(%d) %s", e->goodness(c), e->name);
+		if (ench == 0)
+			mvprintw(x++, y, "%s", e->name);
+		else
+			mvprintw(x++, y, "+%d %s", ench, e->name);
 	} else {
-		mvprintw(x++, y, "(%d) %s x%d", e->goodness(c), e->name, count);
+		mvprintw(x++, y, "%s x%d", e->name, count);
 	}
 	if (e->slot == WEAPON) {
 		Weapon *w = (Weapon*)e;
@@ -501,7 +617,7 @@ void gameRefresh() {
 	initX = x;
 	if (creatureToShow) {
 		attrset(COLOR_PAIR(creatureToShow->pixel.color));
-		mvprintw(x++, y, "LVL %d %s #%d", creatureToShow->level, creatureToShow->name, creatureToShow->index);
+		mvprintw(x++, y, "LVL %d %s", creatureToShow->level, creatureToShow->name);
 		x++;
 
 		attrset(COLOR_PAIR(getColorIndex(7, 0, 0)));
@@ -536,6 +652,56 @@ void gameRefresh() {
 
 		x++;
 
+
+		attrset(COLOR_PAIR(getColorIndex(4, 4, 4)));
+		mvprintw(x++, y, "Skills");
+
+		x++;
+
+		for (unsigned i = 0; i < creatureToShow->skills.size(); i++) {
+			Skill *s = creatureToShow->skills[i];
+			mvprintw(x, y, "%s", s->name);
+
+			int t = y + strlen(s->name) + 1;
+			bool p = false;
+			if (s->requiresTarget()) {
+				attrset(COLOR_PAIR(getColorIndex(4, 4, 4)));
+				if (!p++) mvaddch(x, t++, '(');
+				else mvaddch(x, t++, ' ');
+
+				attrset(COLOR_PAIR(getColorIndex(7, 7, 0)));
+				mvaddch(x, t++, 'X');
+			}
+			if (s->manaCost) {
+				attrset(COLOR_PAIR(getColorIndex(4, 4, 4)));
+				if (!p++) mvaddch(x, t++, '(');
+				else mvaddch(x, t++, ' ');
+				attrset(COLOR_PAIR(getColorIndex(0, 0, 7)));
+				sprintf_s(buff, "%dmp", s->manaCost);
+				mvprintw(x, t, "%s", buff);
+				t += strlen(buff);
+			}
+			int cd = (int)max(s->timeToNextCast - globalTick, creatureToShow->timeToNextSkill - globalTick);
+
+			if (cd > 0) {
+				attrset(COLOR_PAIR(getColorIndex(4, 4, 4)));
+				if (!p++) mvaddch(x, t++, '(');
+				else mvaddch(x, t++, ' ');
+				attrset(COLOR_PAIR(getColorIndex(0, 0, 7)));
+				sprintf_s(buff, "%dcd", cd);
+				mvprintw(x, t, "%s", buff);
+				t += strlen(buff);
+			}
+
+			attrset(COLOR_PAIR(getColorIndex(4, 4, 4)));
+			if (p) mvaddch(x, t++, ')');
+			x++;
+		}
+
+
+
+
+		x++;
 		mvprintw(x++, y, "Inventory");
 		x++;
 
@@ -627,11 +793,14 @@ void gameRefresh() {
 			x += 2;
 
 			attrset(COLOR_PAIR(actionPoint >= createSingeCreatureP ? getColorIndex(0, 7, 7) : getColorIndex(2, 2, 2)));
-			mvprintw(x++, y, "1 - Generate a single creature (AP %d)", createSingeCreatureP);
+			mvprintw(x++, y, "1 - Generate a stronger creature (AP %d)", createSingeCreatureP);
 			attrset(COLOR_PAIR(actionPoint >= createCreatureGroupP ? getColorIndex(0, 7, 7) : getColorIndex(2, 2, 2)));
 			mvprintw(x++, y, "2 - Generate a creature group (AP %d)", createCreatureGroupP);
 			attrset(COLOR_PAIR(actionPoint >= takeControlP ? getColorIndex(0, 7, 7) : getColorIndex(2, 2, 2)));
 			mvprintw(x++, y, "3 - Take control of a unit (AP %d)", takeControlP);
+			x++;
+			attrset(COLOR_PAIR(getColorIndex(0, 7, 7)));
+			mvprintw(x++, y, "Space - Toggle pause/play");
 		} else if (menu == MENU_CONTROL_CREATURE) {
 
 			attrset(COLOR_PAIR(getColorIndex(7, 7, 7)));
@@ -655,7 +824,7 @@ void gameRefresh() {
 			mvprintw(x + 2, y, "4-5-6 | 0 Use a skill/item");
 			mvprintw(x + 3, y, " /|\\  |");
 			mvprintw(x + 4, y, "1 2 3 |");
-			x += 6;
+			x += 7;
 
 			mvprintw(x++, y, "Enter - Release Control");
 		} else if (menu == MENU_USE_SKILL) {
@@ -665,6 +834,10 @@ void gameRefresh() {
 			mvaddch(x + 1, y + 0, ACS_LARROW);
 			mvaddch(x + 1, y + 1, ACS_DARROW);
 			mvaddch(x + 1, y + 2, ACS_RARROW);
+
+			mvprintw(x - 1, y + 18, "2 - Prev. Skill");
+			mvprintw(x + 0, y + 18, "5 - Use. Skill");
+			mvprintw(x + 1, y + 18, "8 - Use. Skill");
 
 			mvprintw(x + 1, y + 4, "Move cursor", actionPoint, 100);
 			x += 3;
@@ -708,7 +881,7 @@ void gameRefresh() {
 						mvprintw(x, t, "%s", buff);
 						t += strlen(buff);
 					}
-					int cd = (int)max(s->timeToNextCast - globalTick, creatureToControl->timeToNextSkill);
+					int cd = (int)max(s->timeToNextCast - globalTick, creatureToControl->timeToNextSkill - globalTick);
 
 					if (cd > 0) {
 						attrset(COLOR_PAIR(getColorIndex(7, 7, 7)));
@@ -780,7 +953,7 @@ void gameRefresh() {
 	attrset(COLOR_PAIR(255));
 	mvprintw(0, 2, "Tick : %d", (int)(globalTick));
 
-	mvprintw(0, 20, "Level : %d", currentLevel);
+	mvprintw(0, 25, "Floor : %d", currentLevel);
 
 	for (unsigned i = 0; i < creatures.size(); i++) {
 		mazeWindow.data[creatures[i]->pos.x][creatures[i]->pos.y] = creatures[i]->pixel;
@@ -822,7 +995,20 @@ void gameRefresh() {
 
 	attrset(COLOR_PAIR(255));
 
-	int j = messagePos;
+	if (tickGame) {
+		messageScrollVal = 0;
+	} else {
+		int z = 0;
+		if (messageScrollVal > 0) {
+			mvprintw(mazeWindow.windowPos.x + mazeWindow.windowSize.x - 1, 2, " + Scroll Down");
+			z += 16;
+		}
+
+		if (messageScrollVal < messageCount - 14) {
+			mvprintw(mazeWindow.windowPos.x + mazeWindow.windowSize.x - 1, z + 1, "%c - Scroll Up", z == 0 ? ' ' : '/');
+		}
+	}
+	int j = messagePos - messageScrollVal;
 	int i = 0;
 
 	do {
@@ -835,20 +1021,28 @@ void gameRefresh() {
 		}
 	} while (j != messagePos && i < 13);
 
+	attrset(COLOR_PAIR(1));
+	move(0, 50);
 
-	move(0, 0);
 	refresh();
 }
 
 bool tick() {
 	bool hasChange = false;
 
-	while (globalTick - lastAPUpdateTick> 200.0f) {
+	while (globalTick - lastAPUpdateTick > 200.0f) {
 		lastAPUpdateTick += 200.0f;
 		actionPoint++;
 		hasChange = true;
 	}
 
+	if (creatureToControl && globalTick > controlEndTime) {
+		creatureToControl->controlAction = 0;
+		creatureToControl->beingControlled = FALSE;
+		creatureToControl->hasTarget = false;
+		creatureToControl = NULL;
+		menu = MENU_MAIN;
+	}
 	globalTick += 1.0f;
 	for (unsigned i = 0; i < creatures.size(); i++) {
 		if (creatures[i]->isDead) {
@@ -877,6 +1071,8 @@ int WINAPI  WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
 	ShowWindow(GetActiveWindow(), SW_SHOW);
 	win = initscr();
+	raw();
+	keypad(stdscr, TRUE);
 	start_color();
 	initTools();
 
@@ -885,15 +1081,12 @@ int WINAPI  WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 	nodelay(win, true);
 	curs_set(0);
 
-	resize_term(45, 120);
+	resize_term(45, 125);
 
 	int row, col;
 	getmaxyx(stdscr, row, col);
 	mazeWindow.windowSize.x = row - 15;
 	mazeWindow.windowSize.y = col - 45;
-
-	resetGame();
-
 	for (int r = 0; r < 8; r++) {
 		for (int g = 0; g < 8; g++) {
 			for (int b = 0; b < 4; b++) {
@@ -908,6 +1101,9 @@ int WINAPI  WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 			}
 		}
 	}
+	resetGame();
+	msleep(3000);
+
 
 	mazeWindow.windowPos.x = 1;
 	mazeWindow.windowPos.y = 2;

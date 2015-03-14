@@ -43,7 +43,7 @@ void addBuff(Equipment* e, vector<int>& weights, int level, int maxBuffCount, in
 	}
 }
 
-Weapon* getWeapon(int level) {
+Weapon* getWeapon(int level, bool overrideNoItem) {
 	bool no_weapon = level < 4 ? ran(4 - level) != 0 : 0;
 	if (level == -1) {
 		no_weapon = true;
@@ -52,11 +52,13 @@ Weapon* getWeapon(int level) {
 	int rangeMin = 0;
 	int rangeMax = 4;
 
+	no_weapon &= !overrideNoItem;
+
 	if (no_weapon) {
 		return NULL;
 	} else {
 		rangeMin = 1;
-		rangeMax = 4;
+		rangeMax = 5;
 	}
 	Weapon *w = new Weapon();
 	w->slot = WEAPON;
@@ -92,6 +94,13 @@ Weapon* getWeapon(int level) {
 			w->range = 2;
 			strcpy_s(w->name, "Spear");
 			break;
+		case 5:
+			w->minDamage = 2 + ran(6) + level;
+			w->maxDamage = w->minDamage + ran(8 + level * 2);
+			w->swingTime = ranf(15.0f, 20.0f);
+			strcpy_s(w->name, "Axe");
+			w->range = 1;
+			break;
 	}
 
 	vector<int> weights(BUFF_CNT);
@@ -100,8 +109,8 @@ Weapon* getWeapon(int level) {
 
 	weights[NO_BUFF] = 6;
 
-
-	weights[POISONED] = 10;
+	weights[VAMPIRIC] = 5;
+	weights[POISONED] = 5;
 	weights[FIRE_DAMAGE] = 10;
 	weights[ICE_DAMAGE] = 10;
 	weights[LIGHTING_DAMAGE] = 10;
@@ -229,7 +238,7 @@ Equipment* getArmor(int level, bool overrideNoArmor) {
 	return e;
 }
 
-Equipment* getShield(int level) {
+Equipment* getShield(int level, bool overrideNoItem) {
 	int rangeMin = 0;
 	int rangeMax = 4;
 
@@ -241,6 +250,7 @@ Equipment* getShield(int level) {
 	} else {
 		no_armor = false;
 	}
+	no_armor &= !overrideNoItem;
 
 	if (no_armor) {
 		return NULL;
@@ -328,7 +338,7 @@ Equipment* getShield(int level) {
 	return e;
 }
 
-Equipment* getHelm(int level) {
+Equipment* getHelm(int level, bool overrideNoItem) {
 	int rangeMin = 0;
 	int rangeMax = 4;
 
@@ -340,6 +350,7 @@ Equipment* getHelm(int level) {
 	} else {
 		no_armor = false;
 	}
+	no_armor &= !overrideNoItem;
 
 	if (no_armor) {
 		return NULL;
@@ -414,7 +425,7 @@ Equipment* getHelm(int level) {
 	return e;
 }
 
-Equipment* getBoots(int level) {
+Equipment* getBoots(int level, bool overrideNoItem) {
 	int rangeMin = 0;
 	int rangeMax = 4;
 
@@ -426,6 +437,7 @@ Equipment* getBoots(int level) {
 	} else {
 		no_armor = false;
 	}
+	no_armor &= !overrideNoItem;
 
 	if (no_armor) {
 		return NULL;
@@ -499,7 +511,7 @@ Equipment* getBoots(int level) {
 	return e;
 }
 
-Equipment* getGloves(int level) {
+Equipment* getGloves(int level, bool overrideNoItem) {
 	int rangeMin = 0;
 	int rangeMax = 4;
 
@@ -511,6 +523,7 @@ Equipment* getGloves(int level) {
 	} else {
 		no_armor = false;
 	}
+	no_armor &= !overrideNoItem;
 
 	if (no_armor) {
 		return NULL;
@@ -584,7 +597,7 @@ Equipment* getGloves(int level) {
 	return e;
 }
 
-Equipment* getRing(int level) {
+Equipment* getRing(int level, bool overrideNoItem) {
 	int rangeMin = 0;
 	int rangeMax = 4;
 
@@ -596,6 +609,7 @@ Equipment* getRing(int level) {
 	} else {
 		no_armor = false;
 	}
+	no_armor &= !overrideNoItem;
 
 	if (no_armor) {
 		return NULL;
@@ -670,7 +684,7 @@ Equipment* getRing(int level) {
 	return e;
 }
 
-Equipment* getAmulet(int level) {
+Equipment* getAmulet(int level, bool overrideNoItem) {
 	int rangeMin = 0;
 	int rangeMax = 4;
 
@@ -682,6 +696,8 @@ Equipment* getAmulet(int level) {
 	} else {
 		no_armor = false;
 	}
+
+	no_armor &= !overrideNoItem;
 
 	if (no_armor) {
 		return NULL;
@@ -757,15 +773,16 @@ Equipment* getAmulet(int level) {
 	return e;
 }
 
-Consumable* getConsumable(int level, int force) {
+Consumable* getConsumable(int level, int force, bool overrideNoItem) {
 	int rangeMin = 0;
 	int rangeMax = 4;
 
 	bool no_item;
-	
+
 
 	no_item = ran(level + 2) != 0;
-	
+
+	no_item &= !overrideNoItem;
 
 
 	if (force != -1) no_item = false;
@@ -781,9 +798,18 @@ Consumable* getConsumable(int level, int force) {
 		}
 	}
 
+
+
 	Consumable *e = new Consumable();
 	e->slot = CONSUMABLE;
 	e->type = rangeMin + ran(rangeMax - rangeMin + 1);
+	if (force == -1) {
+		if (e->type == ENCH_WEAPON || e->type == ENCH_ARMOR) {
+			if (ran(3) == 0) e->type = rangeMin + ran(rangeMax - rangeMin + 1);
+		}
+		if (e->type == ENCH_WEAPON && ran(3) == 0) e->type = ENCH_ARMOR;
+		if (ran(5) == 0) e->type = HEAL_POT;
+	}
 	e->count = 1;
 	switch (e->type) {
 		case 0:
@@ -853,7 +879,7 @@ Creature* generateGoblin(int level, Pos pos) {
 	c->hpMax = 20 + level * 10 + ran(4) * 5;
 	c->hp = c->hpMax;
 	c->mp = 0;
-	c->minExp = 30 + level*10;
+	c->minExp = 30 + level * 10;
 	c->maxExp = (int)(c->minExp*1.2f);
 	c->sight = 6.0f;
 	c->movePerTick = 6.0f;
@@ -894,7 +920,7 @@ Creature* generateButterfly() {
 	c->type = ADVENTURER_ALLY;
 	c->level = 1;
 	c->pixel.character = 'b';
-	c->chanceToHit = 300;
+	c->chanceToHit = 100;
 	c->cantAttack = true;
 	int r = 0, g = 0, b = 0;
 	int t = ran(3);

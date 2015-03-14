@@ -25,7 +25,7 @@ using namespace std;
 
 #define MAZE_W 75
 #define MAZE_H 75
-
+extern int messageCount;
 #define UP 0
 #define LEFT 1
 #define DOWN 2
@@ -266,6 +266,7 @@ enum {
 	ATK_DMG,
 	ATK_MUL,
 	SIGHT,
+	VAMPIRIC,
 	POISONED,
 	FIRE_DAMAGE,
 	LIGHTING_DAMAGE,
@@ -287,3 +288,4 @@ class Buff;
 
 Buff* getBuff(vector<int>& weights, int level);
 
+void printArt(int x, int y);

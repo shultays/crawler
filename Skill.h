@@ -361,7 +361,7 @@ public:
 			ypush = 1;
 		}
 		mvaddch(x, y + ypush, g > 0 ? ACS_UARROW : ACS_DARROW);
-		mvprintw(x++, y + 2 + ypush, "%s : %c%%%d", isBlock ? "%BLCK" : "%EVSN", (100 - buff) > 0 ? '+' : '-', abs(100 - buff));
+		mvprintw(x++, y + 2 + ypush, "%s : %c%%%d", isBlock ? "BLCK" : "EVSN", (100 - buff) > 0 ? '+' : '-', abs(100 - buff));
 	}
 
 	void start(Creature* creature);
@@ -612,7 +612,31 @@ public:
 
 	int goodness(Creature* creature) { return poisonDamage * 3; }
 
-	void PoisonBladeBuff::attacked(Creature* attacker, Creature* defender, int damage);
+	void attacked(Creature* attacker, Creature* defender, int damage);
+};
+
+class VampiricWeaponBuff : public Buff, public AttackListener {
+public:
+	int stealPercent;
+	VampiricWeaponBuff(int stealPercent = 5) : Buff() {
+		strcpy_s(name, "Vampiric Weapon");
+		this->stealPercent = stealPercent;
+	}
+	void improve() {
+		this->stealPercent += 5;
+	}
+	void printStats(Creature* creature, int &x, int &y) {
+		attrset(COLOR_PAIR(getColorIndex(0, 7, 0)));
+		mvprintw(x++, y, "%s (%%%d)", name, stealPercent);
+	}
+
+	void start(Creature* creature);
+	void end(Creature* creature);
+	void tick(Creature* creature) {}
+
+	int goodness(Creature* creature) { return stealPercent * 2; }
+
+	void attacked(Creature* attacker, Creature* defender, int damage);
 };
 
 class PlusDamageBuff : public Buff, public AttackListener {
@@ -620,7 +644,7 @@ public:
 	int minDamage;
 	int maxDamage;
 	int color;
-	char *damageType;
+	char damageType[32];
 
 	void improve() {
 		int t;
@@ -632,7 +656,7 @@ public:
 		sprintf_s(name, "%s damage (%d - %d)", damageType, minDamage, maxDamage);
 		this->minDamage = minDamage;
 		this->maxDamage = maxDamage;
-		this->damageType = damageType;
+		strcpy_s(this->damageType, damageType);
 		this->color = color;
 	}
 
@@ -715,7 +739,7 @@ public:
 	int minDamage;
 	int maxDamage;
 	LightingSkill() : SingleTargetSkill() {
-		strcpy_s(name, "Lighting");
+		strcpy_s(name, "Lighting Strike");
 		manaCost = 30;
 		minDamage = 2;
 		maxDamage = 20;
@@ -759,7 +783,7 @@ class PoisonBladeSkill : public Skill {
 public:
 	int poisonDamage;
 	PoisonBladeSkill(int poisonDamage = 4) : Skill() {
-		strcpy_s(name, "Lighting");
+		strcpy_s(name, "Poison Blade");
 		manaCost = 0;
 		delayToNextCast = 200.0f;
 		globalSpellDelay = 2.0f;
@@ -783,7 +807,7 @@ public:
 	HealSkill(int healMin = 20, int healMax = 40, int percentHeal = 10, bool canHealOther = true) : Skill() {
 		strcpy_s(name, "Heal");
 		manaCost = 20;
-		delayToNextCast = 500.0f;
+		delayToNextCast = 100.0f;
 		globalSpellDelay = 10.0f;
 		this->healMin = healMin;
 		this->healMax = healMax;
@@ -818,7 +842,6 @@ public:
 	int shouldCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove);
 	void doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove, Pos p);
 };
-
 
 class CharmSkill : public Skill {
 public:
@@ -862,3 +885,111 @@ public:
 	int shouldCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove);
 	void doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove, Pos p);
 };
+
+
+class BloodlustSkill : public Skill {
+public:
+	BloodlustSkill() : Skill() {
+		strcpy_s(name, "Blood Lust");
+		this->manaCost = 45;
+		delayToNextCast = 500.0f;
+		globalSpellDelay = 20.0f;
+	}
+
+	bool requiresTarget() { return false; }
+	int shouldCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove);
+	void doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove, Pos p);
+};
+
+class StoneSkinSkill : public Skill {
+public:
+	StoneSkinSkill() : Skill() {
+		strcpy_s(name, "Stone Skin");
+		this->manaCost = 35;
+		delayToNextCast = 500.0f;
+		globalSpellDelay = 20.0f;
+	}
+
+	bool requiresTarget() { return false; }
+	int shouldCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove);
+	void doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove, Pos p);
+};
+
+
+class DispelSkill : public Skill {
+public:
+	DispelSkill() : Skill() {
+		strcpy_s(name, "Dispel");
+		this->manaCost = 25;
+		delayToNextCast = 500.0f;
+		globalSpellDelay = 20.0f;
+	}
+
+	bool requiresTarget() { return true; }
+	int shouldCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove);
+	void doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove, Pos p);
+};
+
+
+class BlurSkill : public Skill {
+public:
+	BlurSkill() : Skill() {
+		strcpy_s(name, "Blur");
+		this->manaCost = 0;
+		delayToNextCast = 500.0f;
+		globalSpellDelay = 20.0f;
+	}
+
+	bool requiresTarget() { return false; }
+	int shouldCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove);
+	void doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove, Pos p);
+};
+
+
+class AmplifyDamage : public SingleTargetSkill {
+public:
+	AmplifyDamage() : SingleTargetSkill() {
+		strcpy_s(name, "Amplify Damage");
+		this->manaCost = 45;
+		delayToNextCast = 500.0f;
+		globalSpellDelay = 20.0f;
+	}
+
+	void doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove, Pos p);
+};
+
+
+class HasteSkill : public Skill {
+public:
+	HasteSkill() : Skill() {
+		strcpy_s(name, "Haste");
+		this->manaCost = 25;
+		delayToNextCast = 500.0f;
+		globalSpellDelay = 20.0f;
+	}
+
+	bool requiresTarget() { return false; }
+	int shouldCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove);
+	void doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove, Pos p);
+};
+
+
+class ElementalWeaponSkill : public Skill {
+	char damageType[32];
+	int color;
+public:
+	ElementalWeaponSkill(char *name, char *damageType, int color) : Skill() {
+		strcpy_s(this->name, name);
+		strcpy_s(this->damageType, damageType);
+		this->manaCost = 25;
+		delayToNextCast = 500.0f;
+		globalSpellDelay = 20.0f;
+		this->color = color;
+	}
+
+	bool requiresTarget() { return false; }
+	int shouldCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove);
+	void doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove, Pos p);
+};
+
+

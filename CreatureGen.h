@@ -20,16 +20,16 @@ class Consumable;
 class Creature;
 
 void addBuff(Equipment* e, vector<int>& weights, int level, int maxBuffCount = 1, int noBuffChance = 100, bool addName = true);
-Weapon* getWeapon(int level);
+Weapon* getWeapon(int level, bool overrideNoItem = false);
 Equipment* getArmor(int level, bool overrideNoArmor = false);
-Equipment* getShield(int level);
-Equipment* getHelm(int level);
-Equipment* getBoots(int level);
-Equipment* getGloves(int level);
-Equipment* getRing(int level);
-Equipment* getAmulet(int level);
+Equipment* getShield(int level, bool overrideNoItem = false);
+Equipment* getHelm(int level, bool overrideNoItem = false);
+Equipment* getBoots(int level, bool overrideNoItem = false);
+Equipment* getGloves(int level, bool overrideNoItem = false);
+Equipment* getRing(int level, bool overrideNoItem = false);
+Equipment* getAmulet(int level, bool overrideNoItem = false);
 
-Consumable* getConsumable(int level, int force = -1);
+Consumable* getConsumable(int level, int force = -1, bool overrideNoItem = false);
 
 Creature* generateGoblin(int level, Pos pos);
 Creature* generateButterfly();

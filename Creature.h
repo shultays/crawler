@@ -14,7 +14,7 @@ extern bool gotoNextLevel;
 class Creature;
 extern vector<Creature*> creatures;
 extern vector<DroppedEquipment> droppedEquipments;
-
+extern bool cheat;
 #define IS_VISIBLE 1
 #define IS_VISIBLE_BEFORE 2
 #define IS_WALKED_ON 4
@@ -92,6 +92,16 @@ public:
 	}
 };
 
+class SkillTree {
+public:
+	SkillTree(Skill *skill, int gainAtLevel) {
+		this->skill = skill;
+		this->gainAtLevel = gainAtLevel;
+	}
+	Skill* skill;
+	int gainAtLevel;
+};
+
 class Creature {
 public:
 	bool beingControlled;
@@ -166,6 +176,7 @@ public:
 	int sightMult;
 	vector<Buff*> buffs;
 	vector<Skill*> skills;
+	vector<SkillTree> skillToLearn;
 	vector<AttackListener*> attackListeners;
 	Creature* master;
 
@@ -240,11 +251,11 @@ public:
 		pixel.color = ran(256);
 		pixel.character = '?';
 		minExp = maxExp = 0;
-		expToNextLevel = 200;
+		expToNextLevel = 300;
 		controlAction = 0;
 		exp = 0;
 		tickToRegen = 150.0f;
-		tickToManaRegen = 100.0f;
+		tickToManaRegen = 500.0f;
 		wanderMult = 1.0f;
 		explores = wandersAround = false;
 		consumes = false;
@@ -265,11 +276,20 @@ public:
 		levelsUp = false;
 		punchs = new Weapon();
 		punchs->slot = WEAPON;
-		punchs->minDamage = 2 + level;
-		punchs->maxDamage = punchs->minDamage + 4 + level;
-		punchs->swingTime = 15.0f;
+		punchs->minDamage = 1 + level;
+		punchs->maxDamage = punchs->minDamage + 1 + level;
+		punchs->swingTime = 16.0f;
 		strcpy_s(punchs->name, "Punchs");
 		punchs->range = 1;
+		chanceToHit = 1000;
+		damageBoost = 0;
+		damageMult = 1000;
+		attackSpeedMult = 1000;
+		moveSpeedMult = 1000;
+		sightMult = 1000;
+
+		mpRegenMult = 1000;
+		hpRegenMult = 1000;
 
 		for (unsigned i = 0; i < equipmentSlots.size(); i++) {
 			for (unsigned j = 0; j < equipmentSlots[i].size(); j++) {
@@ -279,8 +299,7 @@ public:
 		reset(Pos(-1, -1));
 		equip(punchs);
 	}
-
-	~Creature() {
+	void clear() {
 		for (unsigned i = 0; i < skills.size(); i++) {
 			delete skills[i];
 		}
@@ -304,6 +323,9 @@ public:
 				globalVisible[visible[i].x][visible[i].y]--;
 			}
 		}
+	}
+	~Creature() {
+		clear();
 		if (weapon != punchs) {
 			delete punchs;
 		}
@@ -337,19 +359,20 @@ public:
 		mp = mpMax;
 		goBelow = false;
 
-		damageBoost = 0;
-		damageMult = 1000;
-		attackSpeedMult = 1000;
-		moveSpeedMult = 1000;
-		sightMult = 1000;
-		chanceToHit = 1000;
-
-		mpRegenMult = 1000;
-		hpRegenMult = 1000;
 
 		punchs->minDamage = 2 + level;
 		punchs->maxDamage = punchs->minDamage + 4 + level;
 
+		if (type != ADVENTURER) {
+			sprintf_s(buff, "%s#%d", name, index);
+			strcpy_s(name, buff);
+		}
+
+		for (unsigned i = 0; i < skillToLearn.size(); i++) {
+			if (skillToLearn[i].gainAtLevel <= level) {
+				skills.push_back(skillToLearn[i].skill);
+			}
+		}
 	}
 
 	void updateVisibility() {
@@ -496,11 +519,11 @@ public:
 				controlActionDone = true;
 
 				if (consumable->consumeType == POTION) {
-					sprintf_s(buff, "%s#%d quaffs a %s.", name, index, consumable->name);
+					sprintf_s(buff, "%s quaffs a %s.", name, consumable->name);
 				} else 	if (consumable->consumeType == SCROLL) {
-					sprintf_s(buff, "%s#%d reads %s.", name, index, consumable->name);
+					sprintf_s(buff, "%s reads %s.", name, consumable->name);
 				} else 	if (consumable->consumeType == BOOK) {
-					sprintf_s(buff, "%s#%d read a page from %s.", name, index, consumable->name);
+					sprintf_s(buff, "%s read a page from %s.", name, consumable->name);
 				}
 
 				if (consumable->count == 0) {
@@ -539,12 +562,12 @@ public:
 
 							if (old) {
 								droppedNow.push_back(old);
-								sprintf_s(buff, "%s#%d drops %s and equips %s!", name, index, old->name, p);
+								sprintf_s(buff, "%s drops %s and equips %s!", name, old->name, p);
 							} else {
 								if (slot != CONSUMABLE)
-									sprintf_s(buff, "%s#%d equips %s!", name, index, p);
+									sprintf_s(buff, "%s equips %s!", name, p);
 								else
-									sprintf_s(buff, "%s#%d loots %s!", name, index, p);
+									sprintf_s(buff, "%s loots %s!", name, p);
 							}
 							pushMessage(buff);
 
@@ -604,6 +627,8 @@ public:
 				timeToRunAgain = globalTick + 250;
 			}
 		}
+
+		if (cheat && type == ADVENTURER && hp <= 0) hp = 1;
 		if (hp <= 0) {
 			hp = 0;
 			for (unsigned i = 0; i < creatures.size(); i++) {
@@ -615,33 +640,48 @@ public:
 		}
 	}
 
-	void addExp(int add) {
-		if (!levelsUp) return;
-		exp += add;
-		while (exp >= expToNextLevel) {
-			level++;
-			exp -= expToNextLevel;
-			expToNextLevel = (int)(1.2f*expToNextLevel);
-			expToNextLevel += 200;
+	void levelUp() {
+		level++;
+		for (unsigned i = 0; i < skillToLearn.size(); i++) {
+			if (skillToLearn[i].gainAtLevel == level) {
+				skills.push_back(skillToLearn[i].skill);
+			}
+		}
+
+		if (level != 1) {
 			hpMax += 5 + ran(10);
 			mpMax += 5 + ran(5);
 			if (level % 3 == 0) {
 				DR++;
 			}
-			if (level % 2) {
-				damageBoost += 2 + ran(3);
-			}
+
+			damageBoost += 2 + ran(3);
+
 
 			if (level % 3) {
-				chanceToHit -= 10;
+				chanceToHit -= 40;
 				attackSpeedMult += 5;
 				moveSpeedMult += 5;
 			}
 			hp = hpMax;
 			mp = mpMax;
 
-			sprintf_s(buff, "%s#%d leveled to level %d!", name, index, level);
+
+			exp -= expToNextLevel;
+			expToNextLevel = (int)(1.2f*expToNextLevel);
+			expToNextLevel += 200;
+
+			sprintf_s(buff, "%s leveled to level %d!", name, level);
 			pushMessage(buff);
+		}
+
+	}
+
+	void addExp(int add) {
+		if (!levelsUp) return;
+		exp += add;
+		while (exp >= expToNextLevel) {
+			levelUp();
 		}
 	}
 
@@ -702,13 +742,12 @@ public:
 				}
 			}
 		}
-		if (ran(3) == 0) {
+		if (ran(4) == 0) {
 			dropEquipment(getConsumable(level));
 		}
 		isDead = true;
 		maze.walls[pos.x][pos.y] = 0;
-
-		sprintf_s(buff, "%s#%d dies!", name, index);
+		sprintf_s(buff, "%s dies!", name);
 		pushMessage(buff);
 	}
 
@@ -733,7 +772,7 @@ public:
 			Pos p = visible[i];
 			if (p == pos) continue;
 
-			if (loots && mazeState[visible[i].x][visible[i].y] & HAS_NEW_ITEM) {
+			if ((loots || cheat) && mazeState[visible[i].x][visible[i].y] & HAS_NEW_ITEM) {
 				lootsToCheck.push_back(p);
 				mazeState[visible[i].x][visible[i].y] &= ~HAS_NEW_ITEM;
 			}
@@ -771,7 +810,7 @@ public:
 	}
 
 	void checkConsumables() {
-		if (!consumes) {
+		if (!consumes && !cheat) {
 			return;
 		}
 		if (lastConsumeTick + 10.0f <= globalTick) {
@@ -792,11 +831,11 @@ public:
 
 
 				if (consumable->consumeType == POTION) {
-					sprintf_s(buff, "%s#%d quaffs a %s.", name, index, consumable->name);
+					sprintf_s(buff, "%s quaffs a %s.", name, consumable->name);
 				} else 	if (consumable->consumeType == SCROLL) {
-					sprintf_s(buff, "%s#%d reads %s.", name, index, consumable->name);
+					sprintf_s(buff, "%s reads %s.", name, consumable->name);
 				} else 	if (consumable->consumeType == BOOK) {
-					sprintf_s(buff, "%s#%d read a page from %s.", name, index, consumable->name);
+					sprintf_s(buff, "%s read a page from %s.", name, consumable->name);
 				}
 
 				pushMessage(buff);
@@ -948,7 +987,7 @@ public:
 			if (!creaturesToAttack[attackIndex]->evaded()) {
 				int damage = getWeaponDamage();
 
-				sprintf_s(buff, "%s#%d attacks %s#%d with its %s for %d damage!", name, index, creaturesToAttack[attackIndex]->name, creaturesToAttack[attackIndex]->index, weapon->name, damage);
+				sprintf_s(buff, "%s attacks %s with its %s for %d damage!", name, creaturesToAttack[attackIndex]->name, weapon->name, damage);
 				pushMessage(buff);
 
 				for (unsigned i = 0; i < attackListeners.size(); i++) {
@@ -958,7 +997,7 @@ public:
 
 			} else {
 
-				sprintf_s(buff, "%s#%d attacks %s#%d  but misses.", name, index, creaturesToAttack[attackIndex]->name, creaturesToAttack[attackIndex]->index);
+				sprintf_s(buff, "%s attacks %s but misses.", name, creaturesToAttack[attackIndex]->name);
 				pushMessage(buff);
 			}
 

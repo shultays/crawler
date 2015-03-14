@@ -1,4 +1,4 @@
-﻿Build started 3/13/2015 02:46:45.
+﻿Build started 3/14/2015 03:25:14.
      1>Project "C:\Users\Engin\Documents\GitHub\crawler\crawler.vcxproj" on node 2 (Build target(s)).
      1>ClCompile:
          C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\bin\CL.exe /c /Zi /nologo /W3 /WX- /sdl /O2 /Oi /Oy- /GL /D _MBCS /Gm- /EHsc /MD /GS /Gy /fp:precise /Zc:wchar_t /Zc:forScope /Fo"Release\\" /Fd"Release\vc120.pdb" /Gd /TP /analyze- /errorReport:prompt CreatureGen.cpp Skill.cpp Tools.cpp main.cpp
@@ -19,4 +19,4 @@
 
 Build succeeded.
 
-Time Elapsed 00:00:04.45
+Time Elapsed 00:00:04.94

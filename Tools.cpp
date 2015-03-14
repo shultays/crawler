@@ -14,7 +14,7 @@ int eqipmentIcons[EQ_MAX];
 char eqipmentNames[EQ_MAX][32];
 
 extern Maze maze;
-
+int messageCount;
 int ran(int n) {
 	if (n <= 1) return 0;
 	return rand() % n;
@@ -100,6 +100,10 @@ void initTools() {
 
 	strcpy_s(buffNamers[POISONED], "%s of Poison");
 	strcpy_s(firstBuffNamers[POISONED], "Venomous %s");
+
+	strcpy_s(buffNamers[VAMPIRIC], "%s of Leech");
+	strcpy_s(firstBuffNamers[VAMPIRIC], "Vampiric %s");
+
 
 	strcpy_s(buffNamers[FIRE_DAMAGE], "%s of Fire");
 	strcpy_s(firstBuffNamers[FIRE_DAMAGE], "Ember %s");
@@ -207,6 +211,10 @@ void pushMessage(char *str) {
 				i--;
 		}
 		if (i == 0) break;
+
+		if (messageCount < MAX_MESSAGE) {
+			messageCount++;
+		}
 		messagePos++;
 		if (messagePos >= MAX_MESSAGE) {
 			messagePos -= MAX_MESSAGE;
@@ -286,6 +294,9 @@ Buff* getBuff(vector<int>& weights, int level) {
 		case POISONED:
 			buff = new PoisonBladeBuff(2 + ran(level / 2 + 2) + level / 4);
 			break;
+		case VAMPIRIC:
+			buff = new VampiricWeaponBuff(3 + rani(level, level + 3));
+			break;
 		case FIRE_DAMAGE:
 			min = 2 + ran(level / 2 + 2) + level / 4;
 			max = min + 1 + ran(level / 2 + 2) + level / 4;
@@ -323,4 +334,54 @@ Buff* getBuff(vector<int>& weights, int level) {
 	}
 	buff->buffIndex = buffType;
 	return buff;
+}
+
+
+
+void printArt(int x, int y) {
+	clear();
+
+	attrset(COLOR_PAIR(getColorIndex(7, 7, 7)));
+	mvprintw(x++, y, "       _____ _               ___                                    ");
+	mvprintw(x++, y, "      /__   \\ |__   ___     /   \\_   _ _ __   __ _  ___  ___  _ __  ");
+	mvprintw(x++, y, "        / /\\/ '_ \\ / _ \\   / /\\ / | | | '_ \\ / _` |/ _ \\/ _ \\| '_ \\ ");
+	mvprintw(x++, y, "       / /  | | | |  __/  / /_//| |_| | | | | (_| |  __/ (_) | | | |");
+	mvprintw(x++, y, "       \\/   |_| |_|\\___| /___,'  \\__,_|_| |_|\\__, |\\___|\\___/|_| |_|");
+	mvprintw(x++, y, "                                             |___/        ");
+	mvprintw(x++, y, "                                      /|                      Engin Mercan");
+	mvprintw(x++, y, "                                     |\\|           mail<at>enginmercan.com");
+	mvprintw(x++, y, "                                     |||");
+	mvprintw(x++, y, "                                     |||");
+	mvprintw(x++, y, "                                     |||");
+	mvprintw(x++, y, "                                     |||");
+	mvprintw(x++, y, "                                     |||");
+	mvprintw(x++, y, "                                     |||");
+	mvprintw(x++, y, "                                  ~-[{o}]-~");
+	mvprintw(x++, y, "                                     |/|");
+	mvprintw(x++, y, "              ___                    |/|");
+	mvprintw(x++, y, "             ///~`     |\\\\_          `0'         =\\\\\\\\         . .");
+	mvprintw(x++, y, "            ,  |='  ,))\\_| ~-_                    _)  \\      _/_/|");
+	mvprintw(x++, y, "           / ,' ,;((((((    ~ \\                  `~~~\\-~-_ /~ (_/\\");
+	mvprintw(x++, y, "         /' -~/~)))))))'\\_   _/'                      \\_  /'  D   |");
+	mvprintw(x++, y, "        (       (((((( ~-/ ~-/                          ~-;  /    \\--_");
+	mvprintw(x++, y, "         ~~--|   ))''    ')  `                            `~~\\_    \\   )");
+	mvprintw(x++, y, "             :        (_  ~\\           ,                    /~~-     ./");
+	mvprintw(x++, y, "              \\        \\_   )--__  /(_/)                   |    )    )|");
+	mvprintw(x++, y, "    ___       |_     \\__/~-__    ~~   ,'      /,_;,   __--(   _/      |");
+	mvprintw(x++, y, "  //~~\\`\\    /' ~~~----|     ~~~~~~~~'        \\-  ((~~    __-~        |");
+	mvprintw(x++, y, "((()   `\\`\\_(_     _-~~-\\                      ``~~ ~~~~~~   \\_      /");
+	mvprintw(x++, y, " )))     ~----'   /      \\                                   )       )");
+	mvprintw(x++, y, "  (         ;`~--'        :                                _-    ,;;(");
+	mvprintw(x++, y, "            |    `\\       |                             _-~    ,;;;;)");
+	mvprintw(x++, y, "            |    /'`\\     ;                          _-~          _/");
+	mvprintw(x++, y, "           /~   /    |    )                         /;;;''  ,;;:-~");
+	mvprintw(x++, y, "          |    /     / | /                         |;;'   ,''");
+	mvprintw(x++, y, "          /   /     |  \\\\|                         |   ,;(    -Tua Xiong");
+	mvprintw(x++, y, "        _/  /'       \\  \\_)                   .---__\\_    \\,--._______");
+	mvprintw(x++, y, "       ( )|'         (~-_|                   (;;'  ;;;~~~/' `;;|  `;;;\\");
+	mvprintw(x++, y, "        ) `\\_         |-_;;--__               ~~~----__/'    /'_______/");
+	mvprintw(x++, y, "        `----'       (   `~--_ ~~~;;------------~~~~~ ;;;'_/'");
+	mvprintw(x++, y, "                     `~~~~~~~~'~~~-----....___;;;____---~~");
+
+	refresh();
 }

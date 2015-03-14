@@ -12,14 +12,14 @@ Skill::Skill() {
 
 void SlowBuff::start(Creature* creature) {
 
-	sprintf_s(buff, "%s#%d is slowed!", creature->name, creature->index);
+	sprintf_s(buff, "%s is slowed!", creature->name);
 	if (!silent) pushMessage(buff);
 	BuffGroup::start(creature);
 }
 
 void SlowBuff::end(Creature* creature) {
 
-	sprintf_s(buff, "%s#%d is no longer slowed", creature->name, creature->index);
+	sprintf_s(buff, "%s is no longer slowed", creature->name);
 	if (!silent) pushMessage(buff);
 	BuffGroup::end(creature);
 }
@@ -30,7 +30,7 @@ void Berserk::start(Creature* creature) {
 	ended = false;
 	creature->fearless++;
 
-	sprintf_s(buff, "%s#%d ENRAGES!", creature->name, creature->index);
+	sprintf_s(buff, "%s ENRAGES!", creature->name);
 	if (!silent) pushMessage(buff);
 	tickToDie = globalTick + 100.0f;
 }
@@ -40,7 +40,7 @@ void Berserk::end(Creature* creature) {
 	ended = true;
 	creature->fearless--;
 
-	sprintf_s(buff, "%s#%d is now calm.", creature->name, creature->index);
+	sprintf_s(buff, "%s is now calm.", creature->name);
 	if (!silent) pushMessage(buff);
 }
 
@@ -49,7 +49,7 @@ void PoisonBladeBuff::start(Creature* creature) {
 	ended = false;
 	if (showText) {
 
-		sprintf_s(buff, "%s#%d applies poison to its %s.", creature->name, creature->index, creature->weapon->name);
+		sprintf_s(buff, "%s applies poison to its %s.", creature->name, creature->weapon->name);
 		if (!silent) pushMessage(buff);
 	}
 
@@ -63,7 +63,7 @@ void PoisonBladeBuff::end(Creature* creature) {
 
 	if (showText) {
 
-		sprintf_s(buff, "%s#%d's %s is no longer poisoned.", creature->name, creature->index, creature->weapon->name);
+		sprintf_s(buff, "%s's %s is no longer poisoned.", creature->name, creature->weapon->name);
 		if (!silent) pushMessage(buff);
 	}
 
@@ -100,7 +100,7 @@ void DamageOverTime::start(Creature* creature) {
 	if (!ended) return;
 	ended = false;
 
-	sprintf_s(buff, "%s#%d is now %s!", creature->name, creature->index, name);
+	sprintf_s(buff, "%s is now %s!", creature->name, name);
 	timeToNextDamage = globalTick + dotTick;
 	if (!silent) pushMessage(buff);
 }
@@ -109,7 +109,7 @@ void DamageOverTime::end(Creature* creature) {
 	if (ended) return;
 	ended = true;
 
-	sprintf_s(buff, "%s#%d is no longer %s.", creature->name, creature->index, name);
+	sprintf_s(buff, "%s is no longer %s.", creature->name, name);
 	if (!silent) pushMessage(buff);
 }
 
@@ -149,7 +149,7 @@ void BerserkSkill::doCast(Creature* creature, vector<Creature*>& allies, vector<
 	creature->buffs.push_back(b);
 
 
-	sprintf_s(buff, "%s#%d goes berserk!", creature->name, creature->index, name);
+	sprintf_s(buff, "%s goes berserk!", creature->name, name);
 	if (!silent) pushMessage(buff);
 
 	creature->buffs[creature->buffs.size() - 1]->start(creature);
@@ -204,14 +204,62 @@ void HealSkill::doCast(Creature* creature, vector<Creature*>& allies, vector<Cre
 	int healAmount = rani(healMin, healMax) + creatureToHeal->hpMax * percentHeal / 100;
 
 	if (creatureToHeal == creature) {
-		sprintf_s(buff, "%s#%d heals itself for %d hp!", creature->name, creature->index, healAmount);
+		sprintf_s(buff, "%s heals itself for %d hp!", creature->name, healAmount);
 	} else {
-		sprintf_s(buff, "%s#%d heals %s#%d for %d hp!", creature->name, creature->index, creatureToHeal->name, creatureToHeal->index, healAmount);
+		sprintf_s(buff, "%s heals %s for %d hp!", creature->name, creatureToHeal->name, healAmount);
 	}
 	if (!silent) pushMessage(buff);
 	creatureToHeal->heal(healAmount);
 	timeToNextCast = globalTick + delayToNextCast;
 }
+
+
+void AmplifyDamage::doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove, Pos p) {
+	if (p.x != -1) {
+		creatureToCast = NULL;
+		for (unsigned i = 0; i < creatures.size(); i++) {
+			if (creatures[i]->pos == p) {
+				creatureToCast = creatures[i];
+				break;
+			}
+		}
+	}
+	if (!creatureToCast) return;
+
+
+
+	sprintf_s(buff, "%s armor is reduced.", creatureToCast);
+	if (!silent) pushMessage(buff);
+	Buff *b = new DRBuff(-5);
+
+	creature->buffs.push_back(b);
+	b->tickToDie = globalTick + 100.0f;
+	strcpy_s(b->name, "Damage Amplify");
+	b->start(creature);
+
+	timeToNextCast = globalTick + delayToNextCast;
+}
+
+
+int HasteSkill::shouldCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove) {
+	if (enemies.size() >= 1 && ran(100) == 0) {
+		return 1;
+	}
+	return 0;
+}
+
+void HasteSkill::doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove, Pos p) {
+	sprintf_s(buff, "%s is hastened.", creature, creature);
+	if (!silent) pushMessage(buff);
+	Buff *b = new SlowBuff(140, 120);
+	creature->buffs.push_back(b);
+	b->tickToDie = globalTick + 200.0f;
+	strcpy_s(b->name, "Haste");
+	b->start(creature);
+
+	timeToNextCast = globalTick + delayToNextCast;
+}
+
 
 int ManaSkill::shouldCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove) {
 	if (creature->mp < creature->mpMax / 6 && enemies.size() >= 2) {
@@ -222,7 +270,7 @@ int ManaSkill::shouldCast(Creature* creature, vector<Creature*>& allies, vector<
 
 void ManaSkill::doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove, Pos p) {
 
-	sprintf_s(buff, "%s#%d's mana is fully restored.!", creature->name, creature->index);
+	sprintf_s(buff, "%s's mana is fully restored.!", creature->name);
 	if (!silent) pushMessage(buff);
 	creature->mp = creature->mpMax;
 }
@@ -262,10 +310,10 @@ void LightingSkill::doCast(Creature* creature, vector<Creature*>& allies, vector
 	}
 	if (!creatureToCast) return;
 
-	sprintf_s(buff, "%s#%d casts lighting!", creature->name, creature->index);
+	sprintf_s(buff, "%s casts lighting!", creature->name);
 	if (!silent) pushMessage(buff);
 
-	sprintf_s(buff, "%s#%d damages %s#%d for %d hp!", creature->name, creature->index, creatureToCast->name, creatureToCast->index, damage);
+	sprintf_s(buff, "%s damages %s for %d hp!", creature->name, creatureToCast->name, damage);
 	if (!silent) pushMessage(buff);
 	creatureToCast->doDamage(creature->index, damage);
 
@@ -287,10 +335,10 @@ void FireBallSkill::doCast(Creature* creature, vector<Creature*>& allies, vector
 	}
 	if (!creatureToCast) return;
 
-	sprintf_s(buff, "%s#%d casts Fire Ball!", creature->name, creature->index);
+	sprintf_s(buff, "%s casts Fire Ball!", creature->name);
 	if (!silent) pushMessage(buff);
 
-	sprintf_s(buff, "%s#%d damages %s#%d for %d hp!", creature->name, creature->index, creatureToCast->name, creatureToCast->index, damage);
+	sprintf_s(buff, "%s damages %s for %d hp!", creature->name, creatureToCast->name, damage);
 	if (!silent) pushMessage(buff);
 	creatureToCast->doDamage(creature->index, damage);
 
@@ -323,10 +371,10 @@ void IceBoltSkill::doCast(Creature* creature, vector<Creature*>& allies, vector<
 	}
 	if (!creatureToCast) return;
 
-	sprintf_s(buff, "%s#%d casts Ice Bolt!", creature->name, creature->index);
+	sprintf_s(buff, "%s casts Ice Bolt!", creature->name);
 	if (!silent) pushMessage(buff);
 
-	sprintf_s(buff, "%s#%d damages %s#%d for %d hp!", creature->name, creature->index, creatureToCast->name, creatureToCast->index, damage);
+	sprintf_s(buff, "%s damages %s for %d hp!", creature->name, creatureToCast->name, damage);
 	if (!silent) pushMessage(buff);
 	creatureToCast->doDamage(creature->index, damage);
 
@@ -358,7 +406,7 @@ int EnchantSkill::shouldCast(Creature* creature, vector<Creature*>& allies, vect
 	if (enemies.size() != 0) {
 		return 0;
 	}
-	if (ran(1000)) return 0;
+	if (ran(150)) return 0;
 
 	if (isWeapon) {
 		if (creature->weapon->type == 0) return 0;
@@ -404,7 +452,7 @@ void EnchantSkill::doCast(Creature* creature, vector<Creature*>& allies, vector<
 		int j = ran(total);
 
 		int toCheck[3] = { ARMOR, HELM, SHIELD };
-		for (int k = 0; k < 3; k++) {
+		for (int k = 0; k < 3 && !toEnchant; k++) {
 			for (unsigned i = 0; i < creature->equipmentSlots[toCheck[k]].size(); i++) {
 				if (creature->equipmentSlots[toCheck[k]][i]) {
 					if (j == 0) {
@@ -450,21 +498,21 @@ void EnchantSkill::doCast(Creature* creature, vector<Creature*>& allies, vector<
 			}
 			toEnchant->enchantCount++;
 
-			sprintf_s(buff, "%s#%d enchants %s to +%d!", creature->name, creature->index, toEnchant->name, toEnchant->enchantCount);
-			if (!silent) pushMessage(buff);
 		}
 
+		sprintf_s(buff, "%s enchants %s to +%d!", creature->name, toEnchant->name, toEnchant->enchantCount);
+		if (!silent) pushMessage(buff);
 		toEnchant->buffGroup->end(creature);
 		toEnchant->buffGroup->start(creature);
 	} else {
 
-		sprintf_s(buff, "%s#%d tries to enchant %s but fails!", creature->name, creature->index, toEnchant->name);
+		sprintf_s(buff, "%s tries to enchant %s but fails!", creature->name, toEnchant->name);
 		if (!silent) pushMessage(buff);
 	}
 }
 
 int SummonSkill::shouldCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove) {
-	if (enemies.size() >= 4 && creature->hp < creature->hpMax / 3 && allies.size() < 2) {
+	if ((enemies.size() >= 3 && creature->hp < creature->hpMax / 3 && allies.size() < 2) || enemies.size() >= 5) {
 		return 1;
 	}
 	return 0;
@@ -472,7 +520,11 @@ int SummonSkill::shouldCast(Creature* creature, vector<Creature*>& allies, vecto
 
 void SummonSkill::doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove, Pos p) {
 	vector<Pos> npos;
-	doExplore<MAZE_W, MAZE_H>(creature->pos, maze.walls, moveWeights, 5.0f, npos);
+	Pos pos = creature->pos;
+	if (enemies.size() > 0)
+		pos = creature->getAveragePos(enemies);
+
+	doExplore<MAZE_W, MAZE_H>(pos, maze.walls, seeWeights, 5.0f, npos);
 	for (unsigned i = 0; i < enemies.size(); i++) {
 		enemies[i]->lastAttackCreatureIndex = -1;
 	}
@@ -506,7 +558,7 @@ void CharmSkill::doCast(Creature* creature, vector<Creature*>& allies, vector<Cr
 	Creature* enemy = enemies[ran(enemies.size())];
 
 
-	sprintf_s(buff, "%s#%d charms %s#%d!", creature->name, creature->index, enemy->name, enemy->index);
+	sprintf_s(buff, "%s charms %s!", creature->name, enemy->name);
 	if (!silent) pushMessage(buff);
 	enemy->master = creature;
 	enemy->masterIndex = creature->index;
@@ -515,6 +567,120 @@ void CharmSkill::doCast(Creature* creature, vector<Creature*>& allies, vector<Cr
 	enemy->buffs.push_back(b);
 }
 
+
+int BloodlustSkill::shouldCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove) {
+	if (enemies.size() > 0 && allies.size() >= 2 && ran(50) == 0) {
+		return 10;
+	}
+	return 0;
+}
+
+void BloodlustSkill::doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove, Pos p) {
+	sprintf_s(buff, "%s buffs its alies into blood frenzy!", creature->name);
+	if (!silent) pushMessage(buff);
+
+	for (unsigned i = 0; i < allies.size(); i++) {
+		Buff *b = new HpBuff(20);
+		b->tickToDie = globalTick + 150.0f;
+		allies[i]->buffs.push_back(b);
+		b->start(allies[i]);
+		b = new ConstantDMGBoost(5);
+		b->tickToDie = globalTick + 150.0f;
+		allies[i]->buffs.push_back(b);
+		b->start(allies[i]);
+	}
+	timeToNextCast = globalTick + delayToNextCast;
+}
+
+int ElementalWeaponSkill::shouldCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove) {
+	if (enemies.size() >= 1 && ran(50) == 0) {
+		return 2;
+	}
+	return 0;
+}
+
+void ElementalWeaponSkill::doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove, Pos p) {
+	sprintf_s(buff, "%s enchants its weapon with %s.", creature->name, damageType);
+	if (!silent) pushMessage(buff);
+
+	PlusDamageBuff *b = new PlusDamageBuff(5, 10, damageType, color);
+
+	creature->buffs.push_back(b);
+	b->tickToDie = globalTick + 100.0f;
+	b->start(creature);
+
+	timeToNextCast = globalTick + delayToNextCast;
+}
+
+int StoneSkinSkill::shouldCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove) {
+	if (enemies.size() > 0 && creature->hp < creature->hpMax / 2 && ran(20) == 0) {
+		return 10;
+	}
+	return 0;
+}
+
+void StoneSkinSkill::doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove, Pos p) {
+	sprintf_s(buff, "%s skins morph to stone.", creature->name);
+	if (!silent) pushMessage(buff);
+
+	Buff *b = new DRBuff(6);
+	b->tickToDie = globalTick + 100.0f;
+	creature->buffs.push_back(b);
+	b->start(creature);
+	timeToNextCast = globalTick + delayToNextCast;
+}
+
+int DispelSkill::shouldCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove) {
+
+	return 0;
+}
+
+void DispelSkill::doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove, Pos p) {
+	Creature* creatureToCast = creature;
+
+	if (p.x != -1) {
+		creature = NULL;
+		for (unsigned i = 0; i < creatures.size(); i++) {
+			if (creatures[i]->pos == p) {
+				creatureToCast = creatures[i];
+				break;
+			}
+		}
+	}
+
+	if (creatureToCast == creature)
+		sprintf_s(buff, "%s dispels all all buffs from itself.", creature->name);
+	else
+		sprintf_s(buff, "%s dispels all all buffs from %s.", creature->name, creatureToCast->name);
+
+	if (!silent) pushMessage(buff);
+
+	for (unsigned i = 0; i < creature->buffs.size(); i++) {
+		creature->buffs[i]->end(creature);
+		delete creature->buffs[i];
+	}
+	creature->buffs.clear();
+	timeToNextCast = globalTick + delayToNextCast;
+}
+
+
+int BlurSkill::shouldCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove) {
+	if (enemies.size() > 0) {
+		return 1;
+	}
+	return 0;
+}
+
+void BlurSkill::doCast(Creature* creature, vector<Creature*>& allies, vector<Creature*>& enemies, vector<Creature*>& enemiesToAttack, vector<Creature*>& enemiesToMove, Pos p) {
+	sprintf_s(buff, "%s's image gets blurry.", creature->name);
+	if (!silent) pushMessage(buff);
+
+	Buff *b = new EvasionBuff(35, false);
+	b->tickToDie = globalTick + 250.0f;
+	creature->buffs.push_back(b);
+	b->start(creature);
+	timeToNextCast = globalTick + delayToNextCast;
+}
 
 ///
 
@@ -612,12 +778,40 @@ void PlusDamageBuff::end(Creature* creature) {
 	}
 }
 
+
+void VampiricWeaponBuff::start(Creature* creature) {
+	if (!ended) return;
+	ended = false;
+	creature->attackListeners.push_back(this);
+}
+
+void VampiricWeaponBuff::end(Creature* creature) {
+	if (ended) return;
+	ended = true;
+
+
+	for (unsigned i = 0; i < creature->attackListeners.size(); i++) {
+		if (creature->attackListeners[i] == this) {
+			creature->attackListeners[i] = creature->attackListeners[creature->attackListeners.size() - 1];
+			creature->attackListeners.resize(creature->attackListeners.size() - 1);
+			break;
+		}
+	}
+}
+
+void VampiricWeaponBuff::attacked(Creature* attacker, Creature* defender, int damage) {
+	if (ended) return;
+	attacker->heal((damage * stealPercent) / 100 + 1);
+}
+
+
+
 void PlusDamageBuff::attacked(Creature* attacker, Creature* defender, int damage) {
 	if (ended) return;
 	int extra = rani(minDamage, maxDamage);
 
 
-	sprintf_s(buff, "%s#%d does extra %d %s damage!", attacker->name, attacker->index, extra, damageType);
+	sprintf_s(buff, "%s does extra %d %s damage!", attacker->name, extra, damageType);
 	if (!silent) pushMessage(buff);
 	defender->doDamage(attacker->index, extra);
 }
@@ -664,14 +858,14 @@ void MpRegenBuff::end(Creature* creature) {
 void HpBuff::start(Creature* creature) {
 	if (!ended) return;
 	ended = false;
-	creature->hp *= (creature->hpMax + buff) / creature->hpMax;
+	creature->hp = (int)(creature->hp*(float)((creature->hpMax + buff) / creature->hpMax)) + 1;
 	creature->hpMax += buff;
 }
 
 void HpBuff::end(Creature* creature) {
 	if (ended) return;
 	ended = true;
-	creature->hp *= (creature->hpMax - buff) / creature->hpMax;
+	creature->hp = (int)(creature->hp*(float)((creature->hpMax - buff) / creature->hpMax)) + 1;
 	creature->hpMax -= buff;
 	if (creature->hp > creature->hpMax) creature->hp = creature->hpMax;
 }
@@ -680,15 +874,16 @@ void MpBuff::start(Creature* creature) {
 	if (!ended) return;
 	ended = false;
 	if (creature->mpMax) {
-		creature->mp *= (creature->mpMax + buff) / creature->mpMax;
+		creature->mp = (int)(creature->mp*(float)((creature->mpMax + buff) / creature->mpMax));
 	}
 	creature->mpMax += buff;
+	if (creature->mp > creature->mpMax) creature->mp = creature->mpMax;
 }
 
 void MpBuff::end(Creature* creature) {
 	if (ended) return;
 	ended = true;
-	creature->mp *= (creature->mpMax - buff) / creature->mpMax;
+	creature->mp = (int)(creature->mp*(float)((creature->mpMax - buff) / creature->mpMax));
 	creature->mpMax -= buff;
 	if (creature->mp > creature->mpMax) creature->mp = creature->mpMax;
 }
@@ -711,6 +906,6 @@ void CharmedBuff::end(Creature* creature) {
 	creature->wanderMult = 1.0f;
 
 
-	sprintf_s(buff, "%s#%d is no longer charmed!", creature->name);
+	sprintf_s(buff, "%s is no longer charmed!", creature->name);
 	if (!silent) pushMessage(buff);
 }

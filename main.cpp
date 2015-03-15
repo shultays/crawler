@@ -445,7 +445,7 @@ bool control(int i) {
 					if (actionPoint < takeControlP && !cheat) break;
 
 					if (creatureToShow) {
-						if (creatureToShow->type == ADVENTURER || creatureToControl->type == ADVENTURER_ALLY) {
+						if (creatureToShow->type == ADVENTURER || creatureToShow->type == ADVENTURER_ALLY) {
 							if (!cheat) {
 								sprintf_s(buff, "Can't take control of Adventurer of its allies.");
 								pushMessage(buff);
@@ -1030,8 +1030,8 @@ void gameRefresh() {
 bool tick() {
 	bool hasChange = false;
 
-	while (globalTick - lastAPUpdateTick > 200.0f) {
-		lastAPUpdateTick += 200.0f;
+	while (globalTick - lastAPUpdateTick > 40.0f) {
+		lastAPUpdateTick += 40.0f;
 		actionPoint++;
 		hasChange = true;
 	}
@@ -1046,6 +1046,10 @@ bool tick() {
 	globalTick += 1.0f;
 	for (unsigned i = 0; i < creatures.size(); i++) {
 		if (creatures[i]->isDead) {
+			if (creatureToControl = creatures[i]) {
+				creatureToControl = NULL;
+				menu = MENU_MAIN;
+			}
 			delete creatures[i];
 			creatures[i] = creatures[creatures.size() - 1];
 			creatures.pop_back();

@@ -4,7 +4,7 @@ A dungeon crawler game that I developed for 7dlr (http://7drl.org/). My first ap
 
 Unlike other dungeon crawlers, you don't control the adventurer but the dungeon itself. You can summon creatures (only goblins actually) or control individual creatures. Each action you take uses action points which replenish itself with time so you can't just spam monsters. You get stronger creatures as adventurer dives further into dungeon.
 
-There are skills, eqipments, leveling, consumables in the game. Adventurer can loot enemies, use consumables and spells when necessary. I tried to write some basic AI which decides what to do for adventurer in each turn (and for your goblins). They try to use healing skills while being at low, try to cover near walls so they can't surround the adventurer.
+There are skills, eqipments, leveling, consumables in the game. Adventurer can loot enemies, use consumables and spells when necessary. I tried to write some basic AI which decides what to do for adventurer in each turn (and for your goblins). They try to use healing skills while being at low, try to cover near walls so they can't surround the adventurer. Your creatures have also a simple AI, your shamans heal creatures when they are low, warlocks cast buffs on its allies or casts destructive spells/debufs on adventurer. They can't use consumabled for balancing reasons.
 
 I don't plan updating this game anymore.
 
@@ -28,7 +28,7 @@ Create a single creature which has above average stats and items comparing to cu
 Creates a group of creates (2-4) that has same stats and levels as other creatures in this level.
 * Take control of a unit
 
-Takes control of the unit under your cursor. You can cast skills more efficiently or lure the adventurer if you want.
+Takes control of the unit under your cursor. You can cast skills more efficiently or lure the adventurer if you want. You use numpad to move creature around or cast skills. Bumping adventurer (or other enemies such as butterflies) attacks it. After the creature finishes your command it pauses again. Unpausing game releases control.
 
 There is a vision limitation while creating creatures. You can't create creatures visible to player or other creatures.
 

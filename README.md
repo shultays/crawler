@@ -21,10 +21,13 @@ Use arrow keys to scroll screen and inspect tiles. The items/creatures on the ti
 There are 3 actions you can take. Position your cursor to the place you want the action to happen.
 
 * Generate a stronger creature
+ 
 Create a single creature which has above average stats and items comparing to current level of dungeon.
 * Generate a creature group
+
 Creates a group of creates (2-4) that has same stats and levels as other creatures in this level.
 * Take control of a unit
+
 Takes control of the unit under your cursor. You can cast skills more efficiently or lure the adventurer if you want.
 
 There is a vision limitation while creating creatures. You can't create creatures visible to player or other creatures.
